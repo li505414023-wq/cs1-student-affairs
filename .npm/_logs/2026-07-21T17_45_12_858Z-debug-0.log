@@ -1,0 +1,17 @@
+0 verbose cli /usr/bin/node-22 /usr/bin/npm
+1 info using npm@10.9.4
+2 info using node@v22.22.0
+3 silly config load:file:/usr/lib/node_modules_22/npm/npmrc
+4 silly config load:file:/opt/cs1/.npmrc
+5 silly config load:file:/etc/npmrc
+6 verbose title npm start -H 127.0.0.1 -p 3000
+7 verbose argv "start" "--" "-H" "127.0.0.1" "-p" "3000"
+8 verbose logfile logs-max:10 dir:/opt/cs1/.npm/_logs/2026-07-21T17_45_12_858Z-
+9 verbose logfile /opt/cs1/.npm/_logs/2026-07-21T17_45_12_858Z-debug-0.log
+10 silly logfile done cleaning log files
+11 verbose cwd /opt/cs1
+12 verbose os Linux 6.6.102-5.3.1.alnx4.x86_64
+13 verbose node v22.22.0
+14 verbose npm  v10.9.4
+15 verbose exit 143
+16 verbose code 143
