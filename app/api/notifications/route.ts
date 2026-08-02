@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/db";
 import { notifications } from "@/db/schema";
-import { requirePermission, validateCsrf } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { fail, ok, readJson } from "@/lib/api";
 
 export const runtime = "nodejs";

@@ -218,7 +218,7 @@ class Parser {
     return token.type === type;
   }
 
-  private advanceAs<T extends string>(type: T, value?: string): Token & { value: string } {
+  private advanceAs<T extends string>(_type: T, _value?: string): Token & { value: string } {
     return this.advance() as Token & { value: string };
   }
 

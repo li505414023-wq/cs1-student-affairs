@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { eq, and, lt, inArray, count } from "drizzle-orm";
+import { eq, and, inArray, count } from "drizzle-orm";
 import { getDb } from "@/db";
-import { workflowInstances, workflowTasks, workflowEventLog, workflowModels, workflowForms, notifications } from "@/db/schema";
+import { workflowInstances, workflowTasks, workflowEventLog, workflowModels, notifications } from "@/db/schema";
 import { evaluate } from "./expression";
 import { canOperateTask } from "./access";
 import { WorkflowError } from "./types";
-import type { WorkflowStatus, NodeAction, TaskStatus, TaskResult, AdvanceInput } from "./types";
+import type { WorkflowStatus, AdvanceInput } from "./types";
 
 /**
  * Lightweight workflow execution engine.
@@ -225,7 +225,6 @@ export class WorkflowEngine {
    */
   async getTodo(userId: string, role: string, roleTags: string[] = []) {
     // Match by exact user assignment OR by any of the user's role tags
-    const conditions = [eq(workflowTasks.status, "待处理")];
     const matchValues = [userId, role, ...roleTags].filter(Boolean);
 
     return this.db

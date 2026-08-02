@@ -99,7 +99,6 @@ describe("validateCsrf", () => {
 
   it("enforces the per-user write rate limit (429 after 120 writes/min)", async () => {
     const { validateCsrf } = await import("@/lib/auth");
-    const { ApiError: ApiErrorClass } = await import("@/lib/api");
     const request = { headers: { get: () => "token-abc" } } as unknown as import("next/server").NextRequest;
     const session = { id: "s1", csrfToken: "token-abc", expiresAt: new Date(), user: { id: "u-rate-limited", username: "u", displayName: "u", role: "staff", roleTags: [] } };
 

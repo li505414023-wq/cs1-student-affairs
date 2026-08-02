@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 
 export function FeatureTable({ featureId, feature, columns, rows, rowAction, onView, onExport, onRefresh, onColumns, isLoading }: {
   featureId: string; feature: string; columns: string[]; rows: Array<Record<string, string | number>>;

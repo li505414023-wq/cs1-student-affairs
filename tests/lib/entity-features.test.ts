@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ENTITY_FEATURES, ENTITY_FEATURE_IDS, getEntityConfig, isEntityFeature } from "@/lib/entity-features";
+import { ENTITY_FEATURE_IDS, getEntityConfig, isEntityFeature } from "@/lib/entity-features";
 import { buildEntityDataSchema, validateEntityInput } from "@/lib/validation-entities";
 
 describe("entity feature registry", () => {
