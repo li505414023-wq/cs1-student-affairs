@@ -18,7 +18,7 @@ export class WorkflowEngine {
   /**
    * Start a new workflow instance from a deployed model.
    */
-  async start(modelKey: string, formData: Record<string, unknown>, userId: string): Promise<string> {
+  async start(modelKey: string, formData: Record<string, unknown>, userId: string, recordId?: string): Promise<string> {
     // Load the latest deployed model
     const [model] = await this.db
       .select()
@@ -46,6 +46,7 @@ export class WorkflowEngine {
       formDataJson: formData,
       status: "运行中",
       currentNodeId: startNodeId,
+      recordId: recordId ?? null,
       startedBy: userId,
     });
 
@@ -56,6 +57,35 @@ export class WorkflowEngine {
     await this.transitionToNext(instanceId, startNodeId, nodes as Array<Record<string, unknown>>);
 
     return instanceId;
+  }
+
+  /**
+   * Resolve the current workflow node name for a set of business records.
+   * Returns a map of recordId -> { node, status } for records that started a flow.
+   */
+  async nodesForRecords(recordIds: string[]): Promise<Record<string, { node: string; status: string }>> {
+    if (recordIds.length === 0) return {};
+    const instances = await this.db.select().from(workflowInstances).where(inArray(workflowInstances.recordId, recordIds));
+    if (instances.length === 0) return {};
+    const modelIds = [...new Set(instances.map((instance) => instance.modelId))];
+    const models = await this.db.select().from(workflowModels).where(inArray(workflowModels.id, modelIds));
+    const nodeNameByModel = new Map<string, Map<string, string>>();
+    for (const model of models) {
+      const map = new Map<string, string>();
+      for (const node of ((model.nodesJson as Array<Record<string, unknown>>) ?? [])) {
+        if (node.id && node.name) map.set(String(node.id), String(node.name));
+      }
+      nodeNameByModel.set(model.id, map);
+    }
+    const result: Record<string, { node: string; status: string }> = {};
+    for (const instance of instances) {
+      if (!instance.recordId) continue;
+      const node = instance.status !== "运行中"
+        ? instance.status
+        : nodeNameByModel.get(instance.modelId)?.get(instance.currentNodeId ?? "") ?? "审核中";
+      result[instance.recordId] = { node, status: instance.status };
+    }
+    return result;
   }
 
   /**

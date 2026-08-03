@@ -44,12 +44,12 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
     fetch(`/api/records/${featureId}?page=${page}&pageSize=${RECORDS_PAGE_SIZE}`, { credentials: "same-origin" })
       .then(async (response) => {
         if (!response.ok) { setNotice("数据加载失败，请重试"); return; }
-        const payload = await response.json() as { data: { items: Array<{ id: string; status?: string; data: Record<string, string | number> }>; pagination?: { total: number } } };
+        const payload = await response.json() as { data: { items: Array<{ id: string; status?: string; data: Record<string, string | number>; workflow?: { node: string; status: string } | null }>; pagination?: { total: number } } };
         setPersistedRows(payload.data.items.map((item) => ({
           id: item.id,
           status: item.status ?? "",
           // Workflow tables expose record id/status as business columns
-          ...(presentation.variant === "workflow" ? { 申请编号: String(item.id).slice(0, 8), 审核状态: item.status ?? "" } : {}),
+          ...(presentation.variant === "workflow" ? { 申请编号: String(item.id).slice(0, 8), 当前节点: item.workflow?.node ?? "", 审核状态: item.workflow?.status ?? item.status ?? "" } : {}),
           ...item.data,
         })));
         setTotalRecords(payload.data.pagination?.total ?? payload.data.items.length);
@@ -128,7 +128,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
         const wfResponse = await fetch("/api/workflow/instances", {
           method: "POST", credentials: "same-origin",
           headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-          body: JSON.stringify({ modelKey: workflowModelKey, formData: data }),
+          body: JSON.stringify({ modelKey: workflowModelKey, recordId: payload.data.id, formData: data }),
         });
         if (!wfResponse.ok) setNotice(`${feature}记录已保存，但审批流程发起失败`);
       } catch {

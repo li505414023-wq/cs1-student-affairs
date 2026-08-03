@@ -31,7 +31,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ fea
     const where = and(...conditions);
     const records = await db.select().from(businessRecords).where(where).orderBy(desc(businessRecords.createdAt)).limit(pageSize).offset((page - 1) * pageSize);
     const [totalRow] = await db.select({ value: count() }).from(businessRecords).where(where);
-    const items = records.map((record) => ({ ...record, data: record.dataJson, dataJson: undefined }));
+    const workflowByRecord = await new WorkflowEngine().nodesForRecords(records.map((record) => record.id));
+    const items = records.map((record) => ({ ...record, data: record.dataJson, dataJson: undefined, workflow: workflowByRecord[record.id] ?? null }));
     return ok({ items, pagination: { page, pageSize, total: Number(totalRow?.value ?? 0) } });
   } catch (error) {
     return fail(error, request);
@@ -70,6 +71,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ fe
           modelKeyForFeature(featureId),
           { ...validated.data.data, applicant: session.user.displayName },
           session.user.id,
+          id,
         );
         await writeAudit({ userId: session.user.id, action: "start_workflow", resourceType: "workflow_instance", resourceId: instanceId, detail: { featureId }, ip: requestIp(request) });
       } catch {

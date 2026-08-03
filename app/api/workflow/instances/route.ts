@@ -16,7 +16,8 @@ export async function POST(request: NextRequest) {
     const modelKey = typeof body?.modelKey === "string" ? body.modelKey.trim() : "";
     if (!modelKey) throw new ApiError(422, "请指定流程模型");
     const formData = (body?.formData as Record<string, unknown>) ?? {};
-    const instanceId = await engine.start(modelKey, formData, session.user.id);
+    const recordId = typeof body?.recordId === "string" ? body.recordId.trim() : undefined;
+    const instanceId = await engine.start(modelKey, formData, session.user.id, recordId || undefined);
     await writeAudit({ userId: session.user.id, action: "start_workflow", resourceType: "workflow_instance", resourceId: instanceId, ip: requestIp(request) });
     return ok({ instanceId }, 201);
   } catch (error) {

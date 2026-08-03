@@ -161,6 +161,7 @@ export const workflowInstances = pgTable("workflow_instances", {
   formDataJson: jsonb("form_data_json").$type<Record<string, unknown>>().notNull().default({}),
   status: text("status").notNull().default("运行中"),
   currentNodeId: text("current_node_id"),
+  recordId: text("record_id").references(() => businessRecords.id, { onDelete: "set null" }),
   startedBy: text("started_by").references(() => users.id, { onDelete: "set null" }),
   startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
@@ -170,6 +171,7 @@ export const workflowInstances = pgTable("workflow_instances", {
   index("workflow_instances_model_idx").on(table.modelKey),
   index("workflow_instances_status_idx").on(table.status),
   index("workflow_instances_user_idx").on(table.startedBy),
+  index("workflow_instances_record_idx").on(table.recordId),
 ]);
 
 export const workflowTasks = pgTable("workflow_tasks", {
