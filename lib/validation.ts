@@ -12,14 +12,14 @@ const studentSchema = z.object({
   name: z.string().trim().min(1, "姓名不能为空").max(30, "姓名不能超过30个字符"),
   no: z.string().trim().regex(/^[A-Za-z0-9_-]{4,24}$/, "学号格式不正确"),
   phone: z.string().trim().regex(/^1[3-9][\d*]{9}$/, "手机号格式不正确(脱敏号码亦允许)"),
-  gender: z.enum(["男", "女", "未知"]).optional().default("未知"),
+  gender: z.enum(["男", "女", "未知"], { error: "请选择性别" }).optional().default("未知"),
   faculty: optionalText(80),
   major: optionalText(80),
   className: optionalText(80),
   grade: z.string().trim().regex(/^\d{4}$/, "年级格式不正确").optional().default(""),
   birthDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "出生日期格式不正确").optional().default(""),
   address: optionalText(200),
-  status: z.enum(["在读", "休学", "退学", "毕业"]).optional().default("在读"),
+  status: z.enum(["在读", "休学", "退学", "毕业"], { error: "请选择学生当前状态" }).optional().default("在读"),
 });
 
 export type StudentInput = z.infer<typeof studentSchema>;

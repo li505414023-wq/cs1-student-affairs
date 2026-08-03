@@ -29,6 +29,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
   const [page, setPage] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
   const [formFields, setFormFields] = useState<Array<{ id: string; type: string; label: string; required: boolean }>>([]);
+  const [workflowModelKey, setWorkflowModelKey] = useState("");
   const [stats, setStats] = useState<{ total: number; byStatus: Array<{ status: string; count: number }>; sums: Record<string, number> } | null>(null);
   const RECORDS_PAGE_SIZE = 20;
   const stageIndex = Math.max(0, ["config", "batch", "apply", "review", "archive"].indexOf(stage ?? "review"));
@@ -43,7 +44,13 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
       .then(async (response) => {
         if (!response.ok) { setNotice("数据加载失败，请重试"); return; }
         const payload = await response.json() as { data: { items: Array<{ id: string; status?: string; data: Record<string, string | number> }>; pagination?: { total: number } } };
-        setPersistedRows(payload.data.items.map((item) => ({ id: item.id, status: item.status ?? "", ...item.data })));
+        setPersistedRows(payload.data.items.map((item) => ({
+          id: item.id,
+          status: item.status ?? "",
+          // Workflow tables expose record id/status as business columns
+          ...(presentation.variant === "workflow" ? { 申请编号: String(item.id).slice(0, 8), 审核状态: item.status ?? "" } : {}),
+          ...item.data,
+        })));
         setTotalRecords(payload.data.pagination?.total ?? payload.data.items.length);
       })
       .catch(() => { setNotice("网络连接异常，请检查后重试"); })
@@ -73,6 +80,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
         const payload = await r.json() as { data: { forms: Array<{ id: string; key: string; fields: Array<{ id: string; type: string; label: string; required: boolean }> }>; models: Array<{ key: string; formId: string }> } };
         const model = payload.data.models.find((m) => m.key === featureId);
         if (model) {
+          setWorkflowModelKey(model.key);
           const form = payload.data.forms.find((f) => f.id === model.formId);
           if (form?.fields?.length) setFormFields(form.fields);
         }
@@ -105,14 +113,28 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
   };
 
   const saveRecord = async (data: Record<string, string>) => {
+    const submitStatus = stage === "review" || workflowModelKey ? "已提交" : "草稿";
     const response = await fetch(`/api/records/${featureId}`, {
       method: "POST", credentials: "same-origin",
       headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-      body: JSON.stringify({ data, status: stage === "review" ? "已提交" : "草稿" }),
+      body: JSON.stringify({ data, status: submitStatus }),
     });
     const payload = await response.json() as { data?: { id: string; data: Record<string, string | number> }; error?: string };
     if (!response.ok || !payload.data) { setNotice(payload.error ?? `${feature}保存失败`); return; }
-    setPersistedRows((current) => [{ id: payload.data!.id, ...data }, ...current]);
+    // Start the approval workflow when a deployed model exists for this feature
+    if (workflowModelKey && recordMode === "create") {
+      try {
+        const wfResponse = await fetch("/api/workflow/instances", {
+          method: "POST", credentials: "same-origin",
+          headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+          body: JSON.stringify({ modelKey: workflowModelKey, formData: data }),
+        });
+        if (!wfResponse.ok) setNotice(`${feature}记录已保存，但审批流程发起失败`);
+      } catch {
+        setNotice(`${feature}记录已保存，但审批流程发起失败`);
+      }
+    }
+    setPersistedRows((current) => [{ id: payload.data!.id, status: submitStatus, ...data }, ...current]);
     setRecordMode(null);
     setNotice(recordMode === "create" ? `${feature}记录已保存` : `${feature}处理结果已提交`);
   };

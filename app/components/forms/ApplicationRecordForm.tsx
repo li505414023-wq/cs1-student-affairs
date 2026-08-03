@@ -15,7 +15,7 @@ export function ApplicationRecordForm({ featureId, feature, currentUser, formFie
   const userId = currentUser?.id ?? "";
 
   const domainFields: Record<string, FieldSpec[]> = {
-    leave: [{ label: "请假类型", required: true, type: "select", options: ["事假", "病假", "公假"] }, { label: "请假开始时间", required: true, type: "date" }, { label: "请假结束时间", required: true, type: "date" }, { label: "请假天数", required: true, type: "number" }, { label: "请假理由", required: true, type: "textarea" }],
+    leave: [{ label: "姓名", required: true }, { label: "学号", required: true }, { label: "请假类型", required: true, type: "select", options: ["事假", "病假", "公假", "其他"] }, { label: "开始时间", required: true, type: "date" }, { label: "结束时间", required: true, type: "date" }, { label: "请假天数", required: true, type: "number" }, { label: "请假原因", required: true, type: "textarea" }],
     discipline: [{ label: "违纪类型", required: true, type: "select", options: ["校纪校规", "考试纪律", "宿舍纪律"] }, { label: "违纪时间", required: true, type: "date" }, { label: "违纪地点", required: true }, { label: "违纪事实", required: true, type: "textarea" }],
     "club-apply": [{ label: "社团名称", required: true }, { label: "社团类别", required: true, type: "select", options: ["学术科技", "文化体育", "公益实践"] }, { label: "指导教师", required: true }, { label: "社团简介", required: true, type: "textarea" }],
     "student-card": [{ label: "申办类型", required: true, type: "select", options: ["遗失补办", "损坏换发"] }, { label: "申请原因", required: true, type: "textarea" }],
