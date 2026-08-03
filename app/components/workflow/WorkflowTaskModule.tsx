@@ -178,6 +178,25 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
     }
   };
 
+  const resubmitInstance = async (instance: InstanceItem) => {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/workflow/instances/${instance.id}`, {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+        body: JSON.stringify({ action: "resubmit" }),
+      });
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) { setNotice(payload?.error ?? "重新提交失败，请重试"); return; }
+      setNotice(`已重新提交：${instance.title ?? "流程实例"}`);
+      void load();
+    } catch {
+      setNotice("网络异常，重新提交未完成");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const cancelInstance = async (instance: InstanceItem) => {
     setBusy(true);
     try {
@@ -234,7 +253,7 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
           <h2>{feature}</h2>
           <p>{featureId === "todo" && "分配给您且已就绪的审批任务，点击「处理」查看申请详情并给出审批意见。"}
             {featureId === "claim" && "按角色分派的公共任务，签收后进入您的待办事宜。"}
-            {featureId === "my-request" && "您发起的全部流程实例及当前状态，运行中的流程可以撤回。"}
+            {featureId === "my-request" && "您发起的全部流程实例及当前状态，运行中的流程可以撤回，退回待修改的流程可以重新提交。"}
             {featureId === "my-done" && "您已经处理完成的任务记录。"}
             {featureId === "finished" && "已办结的流程实例归档。"}
             {featureId === "copied" && "抄送事宜功能将在后续版本开放。"}
@@ -287,6 +306,9 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
                         <button className="ghost" onClick={() => void openInstance(instance.id, null)}>详情</button>
                         {featureId === "my-request" && instance.status === "运行中" && (
                           <button className="ghost" disabled={busy} onClick={() => void cancelInstance(instance)}>撤回</button>
+                        )}
+                        {featureId === "my-request" && instance.status === "退回待修改" && (
+                          <button className="primary" disabled={busy} onClick={() => void resubmitInstance(instance)}>重新提交</button>
                         )}
                       </td>
                     </tr>

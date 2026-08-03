@@ -72,6 +72,7 @@ export function StudentHomeModule({ currentUser, onNavigate }: { currentUser: Cu
         <h3>我的申请</h3>
         <div className="metric-grid" style={{ marginTop: 8 }}>
           <article><span>进行中</span><strong><CountUp value={statusCount("运行中")} /></strong><small>等待审批</small></article>
+          <article><span>退回待修改</span><strong><CountUp value={statusCount("退回待修改")} /></strong><small>需修改后重提</small></article>
           <article><span>已完成</span><strong><CountUp value={statusCount("已完成")} /></strong><small>审批通过</small></article>
           <article><span>已拒绝</span><strong><CountUp value={statusCount("已拒绝")} /></strong><small>未通过</small></article>
           <article><span>已撤回</span><strong><CountUp value={statusCount("已撤回")} /></strong><small>主动撤回</small></article>
