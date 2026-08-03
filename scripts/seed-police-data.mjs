@@ -1,7 +1,8 @@
 /**
  * Idempotent seed for police-academy (警务化管理) data:
- * platoons (区队), morning exercise, appearance inspection, conduct scores,
+ * morning exercise, appearance inspection, conduct scores,
  * physical tests, training attendance, duty assignments, drills, political review.
+ * 区队即班级：公安院校的区队合并写入班级管理（classes）同一套数据。
  *
  * Run: node --env-file=.env.local scripts/seed-police-data.mjs
  */
@@ -13,12 +14,14 @@ if (!databaseUrl) throw new Error("缺少 DATABASE_URL");
 
 const pool = new pg.Pool({ connectionString: databaseUrl, max: 2 });
 
+// 区队作为班级写入 classes（列与班级元数据一致），按班级代码幂等。
+const platoonClasses = [
+  { 院系名称: "侦查系", 专业名称: "侦查学", 班级名称: "侦查2601区队", 班级代码: "QD-2601", 所属年级: "2026", 班主任工号: "张卫国", 班级群号: "" },
+  { 院系名称: "治安系", 专业名称: "治安学", 班级名称: "治安2601区队", 班级代码: "QD-2602", 所属年级: "2026", 班主任工号: "李红梅", 班级群号: "" },
+  { 院系名称: "刑侦系", 专业名称: "刑事科学技术", 班级名称: "刑侦2501区队", 班级代码: "QD-2501", 所属年级: "2025", 班主任工号: "王强", 班级群号: "" },
+];
+
 const datasets = {
-  platoon: [
-    { 区队代码: "QD-2601", 区队名称: "侦查2601区队", 所属大队: "侦查大队", 所属年级: "2026", 区队长姓名: "顾明澈", 学生数: "32", 指导员: "张卫国" },
-    { 区队代码: "QD-2602", 区队名称: "治安2601区队", 所属大队: "治安大队", 所属年级: "2026", 区队长姓名: "陆景行", 学生数: "30", 指导员: "李红梅" },
-    { 区队代码: "QD-2501", 区队名称: "刑侦2501区队", 所属大队: "刑侦大队", 所属年级: "2025", 区队长姓名: "江予安", 学生数: "35", 指导员: "王强" },
-  ],
   "morning-exercise": [
     { 日期: "2026-08-03", 姓名: "林晓晨", 学号: "20260001", 区队: "侦查2601区队", 集合时间: "06:28", 缺勤原因: "无", 考勤状态: "正常" },
     { 日期: "2026-08-03", 姓名: "周言川", 学号: "20260002", 区队: "侦查2601区队", 集合时间: "06:35", 缺勤原因: "无", 考勤状态: "迟到" },
@@ -70,6 +73,22 @@ try {
   const admin = await pool.query(`select id from users where role = 'admin' limit 1`);
   const adminId = admin.rows[0]?.id ?? null;
 
+  // 旧版独立的 platoon 记录已废弃（区队并入班级管理），一次性清理。
+  await pool.query(`delete from business_records where feature_id = 'platoon'`);
+
+  // 区队以班级形式幂等写入 classes（按班级代码先删后插，不动其它班级）。
+  for (const data of platoonClasses) {
+    await pool.query(
+      `delete from business_records where feature_id = 'classes' and data_json->>'班级代码' = $1`,
+      [data.班级代码],
+    );
+    await pool.query(
+      `insert into business_records (id, feature_id, data_json, status, created_by, created_at, updated_at)
+       values ($1, 'classes', $2, $3, $4, now(), now())`,
+      [randomUUID(), JSON.stringify(data), "已提交", adminId],
+    );
+  }
+
   for (const [featureId, rows] of Object.entries(datasets)) {
     await pool.query(`delete from business_records where feature_id = $1`, [featureId]);
     for (const data of rows) {
@@ -81,7 +100,7 @@ try {
     }
   }
 
-  const ids = Object.keys(datasets).map((k) => `'${k}'`).join(",");
+  const ids = [...Object.keys(datasets), "classes"].map((k) => `'${k}'`).join(",");
   const { rows: summary } = await pool.query(
     `select feature_id, count(*)::int as n from business_records where feature_id in (${ids}) group by feature_id order by feature_id`,
   );

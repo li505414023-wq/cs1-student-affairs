@@ -151,7 +151,8 @@ export const dormFeatureGroups: FeatureGroup[] = [
 
 export const policeFeatureGroups: FeatureGroup[] = [
   { id: "police-org", label: "组织架构", icon: "队", children: [
-    { label: "区队管理", features: [{ id: "platoon", label: "区队管理", stage: "config" }] },
+    // 公安院校的区队即班级，复用班级管理（classes）同一套数据与后端。
+    { label: "区队管理", features: [{ id: "classes", label: "区队管理", stage: "config" }] },
   ] },
   { id: "police-discipline", label: "日常纪律", icon: "纪", children: [
     { label: "早操管理", features: [{ id: "morning-exercise", label: "早操考勤", stage: "review" }] },

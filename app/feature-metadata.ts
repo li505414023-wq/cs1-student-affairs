@@ -138,7 +138,6 @@ export const featurePresentations: Record<string, FeaturePresentation> = {
   "system-dict": { variant: "list", filters: ["字典名称", "字典编码", "启用状态"], columns: ["字典名称", "字典编码", "字典类型", "字典项数量", "更新时间", "启用状态"], primaryAction: "新增系统字典", rowAction: "字典项" },
   "business-dict": { variant: "list", filters: ["字典名称", "所属业务", "启用状态"], columns: ["字典名称", "字典编码", "所属业务", "字典项数量", "更新时间", "启用状态"], primaryAction: "新增业务字典", rowAction: "字典项" },
   "top-menu": { variant: "list", filters: ["菜单名称", "所属系统", "启用状态"], columns: ["菜单名称", "所属系统", "图标", "跳转地址", "显示排序", "启用状态"], primaryAction: "新增顶部菜单", rowAction: "编辑" },
-  platoon: { variant: "list", filters: ["大队", "区队名称", "启用状态"], columns: ["区队代码", "区队名称", "所属大队", "所属年级", "区队长姓名", "学生数", "指导员"], primaryAction: "新增区队", rowAction: "编辑" },
   "morning-exercise": { variant: "list", filters: ["考勤日期", "区队", "姓名", "考勤状态"], columns: ["日期", "姓名", "学号", "区队", "集合时间", "缺勤原因", "考勤状态"], primaryAction: "导入考勤", rowAction: "核实" },
   "appearance-inspection": { variant: "list", filters: ["检查日期", "区队", "姓名", "检查结果"], columns: ["检查日期", "姓名", "学号", "区队", "检查项目", "扣分", "检查结果", "检查人"], primaryAction: "检查登记", rowAction: "详情" },
   "conduct-score": { variant: "list", filters: ["区队", "姓名", "加减分", "记录日期"], columns: ["记录日期", "姓名", "学号", "区队", "加减分", "事由", "分值", "记录人"], primaryAction: "操行分登记", rowAction: "编辑" },
