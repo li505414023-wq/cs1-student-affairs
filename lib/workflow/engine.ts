@@ -3,7 +3,7 @@ import { eq, and, inArray, count } from "drizzle-orm";
 import { getDb } from "@/db";
 import { workflowInstances, workflowTasks, workflowEventLog, workflowModels, notifications } from "@/db/schema";
 import { evaluate } from "./expression";
-import { canOperateTask } from "./access";
+import { canOperateTask, isFullAccessRole } from "./access";
 import { WorkflowError } from "./types";
 import type { WorkflowStatus, AdvanceInput } from "./types";
 
@@ -254,25 +254,30 @@ export class WorkflowEngine {
    * Get pending tasks for a user — matches by role tags AND direct user assignment.
    */
   async getTodo(userId: string, role: string, roleTags: string[] = []) {
-    // Match by exact user assignment OR by any of the user's role tags
-    const matchValues = [userId, role, ...roleTags].filter(Boolean);
-
-    return this.db
-      .select()
-      .from(workflowTasks)
-      .where(
-        and(
-          eq(workflowTasks.status, "待处理"),
-          inArray(workflowTasks.assigneeValue, matchValues),
-        )
-      )
-      .orderBy(workflowTasks.createdAt);
+    // School-wide roles see every pending task; others match by user/role/tags
+    const base = this.db.select().from(workflowTasks).where(
+      isFullAccessRole(role)
+        ? eq(workflowTasks.status, "待处理")
+        : and(
+            eq(workflowTasks.status, "待处理"),
+            inArray(workflowTasks.assigneeValue, [userId, role, ...roleTags].filter(Boolean)),
+          ),
+    );
+    return base.orderBy(workflowTasks.createdAt);
   }
 
   /**
    * Get claimable (待签收) tasks matching the user's role or role tags.
    */
   async getClaimable(role: string, roleTags: string[] = []) {
+    // School-wide roles may claim any awaiting task
+    if (isFullAccessRole(role)) {
+      return this.db
+        .select()
+        .from(workflowTasks)
+        .where(eq(workflowTasks.status, "待签收"))
+        .orderBy(workflowTasks.createdAt);
+    }
     const matchValues = [role, ...roleTags].filter(Boolean);
     if (matchValues.length === 0) return [];
     return this.db
