@@ -81,6 +81,12 @@ function AppShell() {
     }
   }, [auth]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Close flow panel when switching modules
+  useEffect(() => {
+    setShowFlow(false);
+    setStudentEditor(null);
+  }, [nav.activeFeature]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Workflow design sync (admin only)
   useEffect(() => {
     if (!auth || auth === "loading" || workflowReady.current) return;

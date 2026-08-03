@@ -7,6 +7,7 @@
  */
 import { randomUUID } from "node:crypto";
 import pg from "pg";
+import { seedOrgHierarchy } from "./seed-org-hierarchy.mjs";
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
 if (!databaseUrl) throw new Error("缺少 DATABASE_URL");
@@ -24,36 +25,12 @@ async function put(featureId, code, name, { description = "", parentCode = null,
 }
 
 try {
-  // ---- 学院/专业/班级:从真实学生数据提取 ----
-  const { rows: faculties } = await pool.query(
-    `select distinct faculty from students where faculty is not null and faculty <> '' order by faculty`,
-  );
-  for (const [index, row] of faculties.entries()) {
-    await put("faculty-admin", `FAC-${String(index + 1).padStart(2, "0")}`, row.faculty, { sort: index + 1 });
-  }
-  const facultyCodeOf = new Map(faculties.map((row, index) => [row.faculty, `FAC-${String(index + 1).padStart(2, "0")}`]));
-
-  const { rows: majors } = await pool.query(
-    `select distinct major, faculty from students where major <> '' and faculty <> '' order by major`,
-  );
-  for (const [index, row] of majors.entries()) {
-    await put("major-admin", `MAJ-${String(index + 1).padStart(2, "0")}`, row.major, {
-      parentCode: facultyCodeOf.get(row.faculty) ?? null,
-      sort: index + 1,
-      data: { level: "专科" },
-    });
-  }
-  const majorCodeOf = new Map(majors.map((row, index) => [row.major, `MAJ-${String(index + 1).padStart(2, "0")}`]));
-
-  const { rows: classes } = await pool.query(
-    `select distinct class_name, major, grade from students where class_name <> '' and major <> '' order by class_name`,
-  );
-  for (const [index, row] of classes.entries()) {
-    await put("class-admin", `CLS-${String(index + 1).padStart(2, "0")}`, row.class_name, {
-      parentCode: majorCodeOf.get(row.major) ?? null,
-      sort: index + 1,
-      data: { grade: row.grade ?? "" },
-    });
+  // ---- 学院/专业/班级:委托给 seed-org-hierarchy(确定性哈希码,避免重复) ----
+  const client = await pool.connect();
+  try {
+    await seedOrgHierarchy(client);
+  } finally {
+    client.release();
   }
 
   // ---- 系统字典:字典 + 字典项 ----

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { workflow } from "@/app/system-data";
-import { getPresentation } from "@/app/feature-metadata";
+import { getPresentation, filterOptionsFor } from "@/app/feature-metadata";
 import { filterTableRows } from "@/app/interaction-utils.js";
 import { downloadCsv } from "@/app/components/shared/download-csv";
 import { FeatureTable } from "./FeatureTable";
@@ -151,18 +151,22 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
       )}
 
       <form className="module-filter" onSubmit={(event) => { event.preventDefault(); setAppliedFilters({ ...filterDraft }); }}>
-        {presentation.filters.map((filter) => (
-          <label key={filter}><span>{filter}</span>
-            {filter.includes("状态") || filter.includes("方式") || filter.includes("范围") ? (
-              <select value={filterDraft[filter] ?? ""} onChange={(event) => setFilterDraft((current) => ({ ...current, [filter]: event.target.value }))}>
-                <option value="">请选择{filter}</option><option>全部</option><option>正常</option>
-              </select>
-            ) : (
-              <input value={filterDraft[filter] ?? ""} onChange={(event) => setFilterDraft((current) => ({ ...current, [filter]: event.target.value }))}
-                type={filter.includes("时间") || filter.includes("日期") ? "date" : "text"} placeholder={`请输入${filter}`} />
-            )}
-          </label>
-        ))}
+        {presentation.filters.map((filter) => {
+          const options = filterOptionsFor(filter);
+          return (
+            <label key={filter}><span>{filter}</span>
+              {options ? (
+                <select value={filterDraft[filter] ?? ""} onChange={(event) => setFilterDraft((current) => ({ ...current, [filter]: event.target.value }))}>
+                  <option value="">请选择{filter}</option><option>全部</option>
+                  {options.map((option) => <option key={option}>{option}</option>)}
+                </select>
+              ) : (
+                <input value={filterDraft[filter] ?? ""} onChange={(event) => setFilterDraft((current) => ({ ...current, [filter]: event.target.value }))}
+                  type={filter.includes("时间") || filter.includes("日期") ? "date" : "text"} placeholder={`请输入${filter}`} />
+              )}
+            </label>
+          );
+        })}
         <button className="primary" type="submit">搜索</button>
         <button className="ghost" type="button" onClick={() => { setFilterDraft({}); setAppliedFilters({}); }}>清空</button>
       </form>

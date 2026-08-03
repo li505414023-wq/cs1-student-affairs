@@ -34,7 +34,10 @@ export async function GET(request: NextRequest) {
       .where(and(...conditions))
       .orderBy(asc(managedItems.sortOrder), asc(managedItems.name))
       .limit(1000);
-    return ok({ items: rows });
+    // Guard against duplicate names from multiple seed sources
+    const seen = new Set<string>();
+    const items = rows.filter((row) => (seen.has(row.name) ? false : (seen.add(row.name), true)));
+    return ok({ items });
   } catch (error) {
     return fail(error, request);
   }

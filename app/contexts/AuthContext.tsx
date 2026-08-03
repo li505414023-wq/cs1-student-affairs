@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { AuthSession } from "../components/student/student-types";
 
 type AuthState = AuthSession | "loading" | null;
@@ -20,7 +20,17 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [auth, setAuth] = useState<AuthState>("loading");
-  const [authNotice, setAuthNotice] = useState("");
+  const [authNotice, setAuthNoticeRaw] = useState("");
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-dismiss notice after 5 seconds
+  const setAuthNotice = useCallback((notice: string) => {
+    setAuthNoticeRaw(notice);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    if (notice) {
+      noticeTimer.current = setTimeout(() => setAuthNoticeRaw(""), 5000);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
