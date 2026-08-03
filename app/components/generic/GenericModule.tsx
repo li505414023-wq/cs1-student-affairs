@@ -135,7 +135,8 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
         setNotice(`${feature}记录已保存，但审批流程发起失败`);
       }
     }
-    setPersistedRows((current) => [{ id: payload.data!.id, status: submitStatus, ...data }, ...current]);
+    // Re-fetch so business columns (申请编号/当前节点/审核状态) come from the server
+    fetchRecords();
     setRecordMode(null);
     setNotice(recordMode === "create" ? `${feature}记录已保存` : `${feature}处理结果已提交`);
   };
