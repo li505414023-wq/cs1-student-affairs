@@ -1194,6 +1194,7 @@ td strong { color: var(--color-text-primary); font-weight: var(--font-weight-med
 }
 .section-line { flex: 1; height: 1px; margin-left: var(--space-4); background: var(--color-border); }
 
+.form-section-title { font-weight: 600; font-size: 14px; color: var(--text-strong); margin: 0 0 var(--space-12); }
 .form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-16) var(--space-24); }
 .wide-field { grid-column: span 2; }
 .required { margin-right: 3px; color: var(--color-error); }

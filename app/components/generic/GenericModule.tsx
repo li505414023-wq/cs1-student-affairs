@@ -30,6 +30,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
   const [totalRecords, setTotalRecords] = useState(0);
   const [formFields, setFormFields] = useState<Array<{ id: string; type: string; label: string; required: boolean }>>([]);
   const [workflowModelKey, setWorkflowModelKey] = useState("");
+  const [selectedRow, setSelectedRow] = useState<Record<string, string | number> | null>(null);
   const [stats, setStats] = useState<{ total: number; byStatus: Array<{ status: string; count: number }>; sums: Record<string, number> } | null>(null);
   const RECORDS_PAGE_SIZE = 20;
   const stageIndex = Math.max(0, ["config", "batch", "apply", "review", "archive"].indexOf(stage ?? "review"));
@@ -55,7 +56,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
       })
       .catch(() => { setNotice("网络连接异常，请检查后重试"); })
       .finally(() => setIsLoading(false));
-  }, [featureId, page]);
+  }, [featureId, page, presentation.variant]);
 
   // Server-side aggregation over the full scoped set (not the current page).
   useEffect(() => {
@@ -140,12 +141,16 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
   };
 
   if (recordMode) {
+    const rowData = selectedRow && recordMode === "view"
+      ? { status: String(selectedRow.status ?? ""), data: Object.fromEntries(Object.entries(selectedRow).filter(([key]) => key !== "id" && key !== "status")) }
+      : undefined;
     return (
       <BusinessRecordForm
         featureId={featureId} feature={feature} stage={stage ?? "review"} mode={recordMode}
-        onClose={() => setRecordMode(null)} onSave={saveRecord}
+        onClose={() => { setRecordMode(null); setSelectedRow(null); }} onSave={saveRecord}
         currentUser={currentUser}
         formFields={formFields}
+        record={rowData}
       />
     );
   }
@@ -198,7 +203,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
       <FeatureTable
         featureId={featureId} feature={feature} columns={columns} rows={filteredRows} rowAction={presentation.rowAction}
         isLoading={isLoading}
-        onView={() => setRecordMode("view")}
+        onView={(row) => { setSelectedRow(row); setRecordMode("view"); }}
         onExport={() => { downloadCsv(`${feature}.csv`, columns, filteredRows.map((row) => columns.map((column) => String(row[column] ?? "")))); }}
         onRefresh={() => { fetchRecords(); setFilterDraft({}); setAppliedFilters({}); }}
         onColumns={() => setShowColumns(true)}
