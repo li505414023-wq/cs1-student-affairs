@@ -138,6 +138,16 @@ export const featurePresentations: Record<string, FeaturePresentation> = {
   "system-dict": { variant: "list", filters: ["字典名称", "字典编码", "启用状态"], columns: ["字典名称", "字典编码", "字典类型", "字典项数量", "更新时间", "启用状态"], primaryAction: "新增系统字典", rowAction: "字典项" },
   "business-dict": { variant: "list", filters: ["字典名称", "所属业务", "启用状态"], columns: ["字典名称", "字典编码", "所属业务", "字典项数量", "更新时间", "启用状态"], primaryAction: "新增业务字典", rowAction: "字典项" },
   "top-menu": { variant: "list", filters: ["菜单名称", "所属系统", "启用状态"], columns: ["菜单名称", "所属系统", "图标", "跳转地址", "显示排序", "启用状态"], primaryAction: "新增顶部菜单", rowAction: "编辑" },
+  platoon: { variant: "list", filters: ["大队", "区队名称", "启用状态"], columns: ["区队代码", "区队名称", "所属大队", "所属年级", "区队长姓名", "学生数", "指导员"], primaryAction: "新增区队", rowAction: "编辑" },
+  "morning-exercise": { variant: "list", filters: ["考勤日期", "区队", "姓名", "考勤状态"], columns: ["日期", "姓名", "学号", "区队", "集合时间", "缺勤原因", "考勤状态"], primaryAction: "导入考勤", rowAction: "核实" },
+  "appearance-inspection": { variant: "list", filters: ["检查日期", "区队", "姓名", "检查结果"], columns: ["检查日期", "姓名", "学号", "区队", "检查项目", "扣分", "检查结果", "检查人"], primaryAction: "检查登记", rowAction: "详情" },
+  "conduct-score": { variant: "list", filters: ["区队", "姓名", "加减分", "记录日期"], columns: ["记录日期", "姓名", "学号", "区队", "加减分", "事由", "分值", "记录人"], primaryAction: "操行分登记", rowAction: "编辑" },
+  "conduct-score-stats": { variant: "statistics", filters: ["时间范围", "区队"], columns: ["统计维度", "基础分", "加分", "扣分", "当前得分"], metrics: ["覆盖区队", "平均得分", "累计加分", "累计扣分"] },
+  "physical-test": { variant: "list", filters: ["学号", "姓名", "测试项目", "成绩评定"], columns: ["测试日期", "姓名", "学号", "区队", "测试项目", "成绩", "成绩评定"], primaryAction: "导入体测数据", rowAction: "编辑" },
+  "police-training": { variant: "list", filters: ["训练日期", "训练科目", "区队", "考勤状态"], columns: ["训练日期", "训练科目", "姓名", "学号", "区队", "考勤状态", "备注"], primaryAction: "导入考勤", rowAction: "核实" },
+  "duty-assignment": { variant: "list", filters: ["执勤日期", "执勤地点", "区队", "姓名"], columns: ["执勤日期", "执勤时段", "执勤地点", "姓名", "学号", "区队", "带队教师", "执勤状态"], primaryAction: "安排执勤", rowAction: "编辑" },
+  "emergency-drill": { variant: "list", filters: ["演练名称", "演练类型", "开展日期"], columns: ["演练名称", "演练类型", "开展日期", "参与区队", "参与人数", "完成用时(分)", "演练评价", "组织者"], primaryAction: "演练登记", rowAction: "详情" },
+  "political-review": { variant: "list", filters: ["姓名", "学号", "审查状态"], columns: ["姓名", "学号", "区队", "审查类别", "提交日期", "审查意见", "审查状态"], primaryAction: "新增档案", rowAction: "详情" },
 };
 
 export function getPresentation(featureId: string, stage?: string): FeaturePresentation {

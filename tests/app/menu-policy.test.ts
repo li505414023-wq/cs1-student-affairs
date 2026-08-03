@@ -4,7 +4,7 @@ import { canManageStudents, isAdminGroupVisible, isFeatureVisible, isShellFeatur
 describe("menu policy", () => {
   it("restricts visible systems by role", () => {
     expect(systemsForRole("student")).toEqual(["student"]);
-    expect(systemsForRole("counselor")).toEqual(["student", "admin"]);
+    expect(systemsForRole("counselor")).toEqual(["student", "police", "admin"]);
     expect(systemsForRole("dorm_manager")).toContain("dorm");
     expect(systemsForRole("admin")).toContain("welcome");
     expect(systemsForRole("unknown-role")).toEqual(["student"]);

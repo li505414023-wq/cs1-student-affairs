@@ -7,12 +7,12 @@ import type { SystemId } from "./system-data";
  */
 
 const SYSTEMS_BY_ROLE: Record<string, SystemId[]> = {
-  admin: ["student", "welcome", "dorm", "admin"],
-  department_admin: ["student", "admin"],
-  counselor: ["student", "admin"],
-  staff: ["student", "admin"],
+  admin: ["student", "welcome", "dorm", "police", "admin"],
+  department_admin: ["student", "police", "admin"],
+  counselor: ["student", "police", "admin"],
+  staff: ["student", "police", "admin"],
   dorm_manager: ["student", "dorm", "admin"],
-  viewer: ["student", "admin"],
+  viewer: ["student", "police", "admin"],
   student: ["student"],
 };
 

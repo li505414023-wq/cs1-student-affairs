@@ -149,6 +149,28 @@ export const dormFeatureGroups: FeatureGroup[] = [
   ] },
 ];
 
+export const policeFeatureGroups: FeatureGroup[] = [
+  { id: "police-org", label: "组织架构", icon: "队", children: [
+    { label: "区队管理", features: [{ id: "platoon", label: "区队管理", stage: "config" }] },
+  ] },
+  { id: "police-discipline", label: "日常纪律", icon: "纪", children: [
+    { label: "早操管理", features: [{ id: "morning-exercise", label: "早操考勤", stage: "review" }] },
+    { label: "警容风纪", features: [{ id: "appearance-inspection", label: "警容风纪检查", stage: "review" }] },
+    { label: "操行分", features: [{ id: "conduct-score", label: "操行分登记", stage: "review" }, { id: "conduct-score-stats", label: "操行分统计", stage: "archive" }] },
+  ] },
+  { id: "police-training", label: "体能训练", icon: "训", children: [
+    { label: "体能测试", features: [{ id: "physical-test", label: "体测记录", stage: "review" }] },
+    { label: "警务训练", features: [{ id: "police-training", label: "训练考勤", stage: "review" }] },
+  ] },
+  { id: "police-duty", label: "执勤应急", icon: "勤", children: [
+    { label: "执勤管理", features: [{ id: "duty-assignment", label: "执勤安排", stage: "review" }] },
+    { label: "应急演练", features: [{ id: "emergency-drill", label: "应急演练记录", stage: "review" }] },
+  ] },
+  { id: "police-political", label: "政工档案", icon: "政", children: [
+    { label: "政治审查", features: [{ id: "political-review", label: "政审档案", stage: "archive" }] },
+  ] },
+];
+
 export const adminFeatureGroups: FeatureGroup[] = [
   { id: "workflow", label: "协同办公", icon: "流", children: [
     { label: "流程设计", features: [{ id: "model-design", label: "模型设计", stage: "config" }, { id: "form-design", label: "表单设计", stage: "config" }, { id: "deployment", label: "部署管理", stage: "config" }, { id: "flow-button", label: "流程按钮", stage: "config" }, { id: "flow-category", label: "流程分类", stage: "config" }, { id: "form-default", label: "表单默认值", stage: "config" }, { id: "flow-expression", label: "流程表达式", stage: "config" }] },
@@ -179,11 +201,12 @@ export const adminFeatureGroups: FeatureGroup[] = [
   ] },
 ];
 
-export type SystemId = "student" | "welcome" | "dorm" | "admin";
+export type SystemId = "student" | "welcome" | "dorm" | "police" | "admin";
 export const systems: Array<{ id: SystemId; label: string; shortLabel: string }> = [
   { id: "student", label: "学工管理系统", shortLabel: "学工" },
   { id: "welcome", label: "迎新管理系统", shortLabel: "迎新" },
   { id: "dorm", label: "宿舍管理系统", shortLabel: "宿舍" },
+  { id: "police", label: "警务化管理系统", shortLabel: "警务" },
   { id: "admin", label: "后台管理系统", shortLabel: "后台" },
 ];
 
@@ -191,6 +214,7 @@ export const systemGroups: Record<SystemId, FeatureGroup[]> = {
   student: featureGroups,
   welcome: welcomeFeatureGroups,
   dorm: dormFeatureGroups,
+  police: policeFeatureGroups,
   admin: adminFeatureGroups,
 };
 
