@@ -49,7 +49,7 @@ export function Workspace(props: WorkspaceProps) {
   // Special features with custom rendering
   if (isSpecialFeature(activeFeature, activeSystem)) {
     if (activeFeature === "student-home") {
-      return <StudentHomeModule currentUser={currentUser} onNavigate={navigateToFeature} />;
+      return <StudentHomeModule currentUser={currentUser} csrfToken={csrfToken} onNavigate={navigateToFeature} />;
     }
     if (activeSystem === "student" && activeFeature === "students") {
       return (

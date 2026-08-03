@@ -563,8 +563,11 @@ export class WorkflowEngine {
       throw new WorkflowError("该任务已被他人处理，请刷新后重试", 409);
     }
 
-    // Notify instance starter about completed task
+    // Notify instance starter about completed task. The return action is
+    // skipped here because the return branch in advance() sends a dedicated
+    // "退回修改" notification; notifying both would duplicate the message.
     try {
+      if (input.action === "return") return;
       const [instance] = await this.db.select({ title: workflowInstances.title, startedBy: workflowInstances.startedBy }).from(workflowInstances).where(eq(workflowInstances.id, instanceId)).limit(1);
       if (instance?.startedBy) {
         const resultLabel = input.result ?? "已处理";

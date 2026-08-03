@@ -25,20 +25,40 @@ function formatTime(value: string) {
  * latest notifications — so students land somewhere useful instead of the
  * admin-oriented student list.
  */
-export function StudentHomeModule({ currentUser, onNavigate }: { currentUser: CurrentUser; onNavigate: (featureId: string) => void }) {
+export function StudentHomeModule({ currentUser, csrfToken, onNavigate }: { currentUser: CurrentUser; csrfToken: string; onNavigate: (featureId: string) => void }) {
   const [instances, setInstances] = useState<InstanceSummary[]>([]);
   const [notifications, setNotifications] = useState<NotificationSummary[]>([]);
+  const [notice, setNotice] = useState("");
 
-  useEffect(() => {
-    let active = true;
+  const refresh = () => {
     fetch("/api/workflow/instances?pageSize=50", { credentials: "same-origin" })
-      .then(async (r) => { if (!r.ok || !active) return; const payload = await r.json() as { data: { items: InstanceSummary[] } }; setInstances(payload.data.items); })
+      .then(async (r) => { if (!r.ok) return; const payload = await r.json() as { data: { items: InstanceSummary[] } }; setInstances(payload.data.items); })
       .catch(() => {});
     fetch("/api/notifications", { credentials: "same-origin" })
-      .then(async (r) => { if (!r.ok || !active) return; const payload = await r.json() as { data: { items: NotificationSummary[] } }; setNotifications(payload.data.items.slice(0, 5)); })
+      .then(async (r) => { if (!r.ok) return; const payload = await r.json() as { data: { items: NotificationSummary[] } }; setNotifications(payload.data.items.slice(0, 5)); })
       .catch(() => {});
-    return () => { active = false; };
+  };
+
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const resubmit = async (instance: InstanceSummary) => {
+    try {
+      const response = await fetch(`/api/workflow/instances/${instance.id}`, {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+        body: JSON.stringify({ action: "resubmit" }),
+      });
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) { setNotice(payload?.error ?? "重新提交失败，请重试"); return; }
+      setNotice(`已重新提交：${instance.title ?? "申请"}`);
+      refresh();
+    } catch {
+      setNotice("网络异常，重新提交未完成");
+    }
+  };
 
   const statusCount = (status: string) => instances.filter((item) => item.status === status).length;
 
@@ -70,6 +90,7 @@ export function StudentHomeModule({ currentUser, onNavigate }: { currentUser: Cu
 
       <section style={{ padding: "8px 16px" }}>
         <h3>我的申请</h3>
+        {notice && <div className="action-notice" role="status">{notice}<button aria-label="关闭提示" onClick={() => setNotice("")}>×</button></div>}
         <div className="metric-grid" style={{ marginTop: 8 }}>
           <article><span>进行中</span><strong><CountUp value={statusCount("运行中")} /></strong><small>等待审批</small></article>
           <article><span>退回待修改</span><strong><CountUp value={statusCount("退回待修改")} /></strong><small>需修改后重提</small></article>
@@ -80,9 +101,14 @@ export function StudentHomeModule({ currentUser, onNavigate }: { currentUser: Cu
         {instances.length > 0 && (
           <ul style={{ listStyle: "none", margin: "8px 0 0", padding: 0 }}>
             {instances.slice(0, 5).map((item) => (
-              <li key={item.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--color-border, #f0f0f0)" }}>
+              <li key={item.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--color-border, #f0f0f0)", alignItems: "center" }}>
                 <span>{item.title || "（无标题）"}</span>
-                <span><em style={{ fontStyle: "normal", marginRight: 8 }}>{item.status}</em><small style={{ opacity: 0.6 }}>{formatTime(item.startedAt)}</small></span>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {item.status === "退回待修改" && (
+                    <button className="primary" style={{ padding: "2px 10px", fontSize: 12 }} onClick={() => void resubmit(item)}>重新提交</button>
+                  )}
+                  <em style={{ fontStyle: "normal", marginRight: 8 }}>{item.status}</em><small style={{ opacity: 0.6 }}>{formatTime(item.startedAt)}</small>
+                </span>
               </li>
             ))}
           </ul>
