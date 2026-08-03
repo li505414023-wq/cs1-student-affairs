@@ -10,12 +10,13 @@ type CurrentUser = { id: string; displayName: string; role: string } | null;
 
 type FormField = { id: string; type: string; label: string; required: boolean };
 
-export function BusinessRecordForm({ featureId, feature, stage, mode, onClose, onSave, currentUser, formFields, record }: {
-  featureId: string; feature: string; stage: string; mode: "create" | "view";
+export function BusinessRecordForm({ featureId, feature, stage, mode, onClose, onSave, currentUser, formFields, record, onDelete }: {
+  featureId: string; feature: string; stage: string; mode: "create" | "view" | "edit";
   onClose: () => void; onSave: (data: Record<string, string>) => void;
   currentUser?: CurrentUser;
   formFields?: FormField[];
   record?: { status: string; data: Record<string, string | number> };
+  onDelete?: () => void;
 }) {
   const viewEntries = record ? Object.entries(record.data) : [];
   if (mode === "view" && record) {
@@ -37,6 +38,32 @@ export function BusinessRecordForm({ featureId, feature, stage, mode, onClose, o
             <button className="ghost" type="button" onClick={onClose}>关闭</button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // 编辑模式：按字段回填既有数据，保存时更新同一条记录。
+  if (mode === "edit" && record) {
+    return (
+      <div className="full-form-page">
+        <div className="form-page-head">
+          <div><p className="eyebrow">{feature} / 编辑</p><h1>编辑{feature}</h1></div>
+          <button className="ghost" onClick={onClose}>关闭</button>
+        </div>
+        <form className="form-card" onSubmit={(event) => { event.preventDefault(); const values = Object.fromEntries([...new FormData(event.currentTarget).entries()].map(([key, value]) => [key, String(value)])); onSave(values); }}>
+          <p className="form-section-title">当前状态：<span className="status">{record.status || "未设置"}</span></p>
+          <div className="form-grid">
+            {viewEntries.map(([key, value]) => (
+              <label key={key}><span>{key}</span><input name={key} defaultValue={String(value ?? "")} /></label>
+            ))}
+          </div>
+          <p className="privacy-note">修改后保存将直接更新数据库中的这条记录。</p>
+          <div className="form-actions">
+            {onDelete && <button className="ghost" type="button" onClick={() => { if (window.confirm("确定删除这条记录吗？删除后不可恢复。")) onDelete(); }}>删除记录</button>}
+            <button className="ghost" type="button" onClick={onClose}>取消</button>
+            <button className="primary" type="submit">保存修改</button>
+          </div>
+        </form>
       </div>
     );
   }

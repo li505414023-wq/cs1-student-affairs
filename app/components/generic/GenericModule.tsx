@@ -17,7 +17,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
   featureId: string; feature: string; description?: string; stage?: string; csrfToken: string;
   currentUser?: CurrentUser;
 }) {
-  const [recordMode, setRecordMode] = useState<"create" | "view" | null>(null);
+  const [recordMode, setRecordMode] = useState<"create" | "view" | "edit" | null>(null);
   const [filterDraft, setFilterDraft] = useState<Record<string, string>>({});
   const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({});
   const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
@@ -114,6 +114,26 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
   };
 
   const saveRecord = async (data: Record<string, string>) => {
+    // 编辑模式：更新既有记录（PUT），不新增。
+    if (recordMode === "edit" && selectedRow?.id) {
+      try {
+        const response = await fetch(`/api/records/${featureId}/${selectedRow.id}`, {
+          method: "PUT", credentials: "same-origin",
+          headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+          body: JSON.stringify({ data, status: String(selectedRow.status ?? "已提交") }),
+        });
+        const payload = await response.json() as { error?: string };
+        if (!response.ok) { setNotice(payload.error ?? `${feature}更新失败`); return; }
+      } catch {
+        setNotice("网络异常，更新未完成，请重试");
+        return;
+      }
+      fetchRecords();
+      setRecordMode(null);
+      setSelectedRow(null);
+      setNotice(`${feature}记录已更新`);
+      return;
+    }
     const submitStatus = stage === "review" || workflowModelKey ? "已提交" : "草稿";
     const response = await fetch(`/api/records/${featureId}`, {
       method: "POST", credentials: "same-origin",
@@ -159,8 +179,27 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
     }
   };
 
+  const deleteRecord = async () => {
+    if (!selectedRow?.id) return;
+    try {
+      const response = await fetch(`/api/records/${featureId}/${selectedRow.id}`, {
+        method: "DELETE", credentials: "same-origin",
+        headers: { "x-csrf-token": csrfToken },
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) { setNotice(payload.error ?? `${feature}删除失败`); return; }
+    } catch {
+      setNotice("网络异常，删除未完成，请重试");
+      return;
+    }
+    fetchRecords();
+    setRecordMode(null);
+    setSelectedRow(null);
+    setNotice(`${feature}记录已删除`);
+  };
+
   if (recordMode) {
-    const rowData = selectedRow && recordMode === "view"
+    const rowData = selectedRow && recordMode !== "create"
       ? { status: String(selectedRow.status ?? ""), data: Object.fromEntries(Object.entries(selectedRow).filter(([key]) => key !== "id" && key !== "status")) }
       : undefined;
     return (
@@ -170,6 +209,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
         currentUser={currentUser}
         formFields={formFields}
         record={rowData}
+        onDelete={recordMode === "edit" ? deleteRecord : undefined}
       />
     );
   }
@@ -222,7 +262,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
       <FeatureTable
         featureId={featureId} feature={feature} columns={columns} rows={filteredRows} rowAction={presentation.rowAction}
         isLoading={isLoading}
-        onView={(row) => { setSelectedRow(row); setRecordMode("view"); }}
+        onView={(row) => { setSelectedRow(row); setRecordMode(presentation.rowAction === "编辑" && presentation.variant !== "workflow" ? "edit" : "view"); }}
         onResubmit={presentation.variant === "workflow" ? resubmitRecord : undefined}
         onExport={() => { downloadCsv(`${feature}.csv`, columns, filteredRows.map((row) => columns.map((column) => String(row[column] ?? "")))); }}
         onRefresh={() => { fetchRecords(); setFilterDraft({}); setAppliedFilters({}); }}

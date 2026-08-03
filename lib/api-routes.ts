@@ -42,6 +42,8 @@ export const API_ROUTE_INVENTORY: readonly ApiRouteEntry[] = [
   { module: "业务记录", method: "GET", path: "/api/records/[featureId]", level: "read", description: "记录列表(按角色隔离)" },
   { module: "业务记录", method: "POST", path: "/api/records/[featureId]", level: "write", description: "新增记录(学生可申请类放行)" },
   { module: "业务记录", method: "POST", path: "/api/records/[featureId]/batch", level: "write", description: "批量导入记录" },
+  { module: "业务记录", method: "PUT", path: "/api/records/[featureId]/[id]", level: "write", description: "更新记录(审批中拒绝)" },
+  { module: "业务记录", method: "DELETE", path: "/api/records/[featureId]/[id]", level: "write", description: "删除记录(审批中拒绝)" },
   { module: "班级管理", method: "GET", path: "/api/counselor-classes", level: "read", description: "辅导员-班级绑定列表" },
   { module: "班级管理", method: "POST", path: "/api/counselor-classes", level: "admin", description: "绑定辅导员班级" },
   { module: "班级管理", method: "DELETE", path: "/api/counselor-classes", level: "admin", description: "解除绑定" },
