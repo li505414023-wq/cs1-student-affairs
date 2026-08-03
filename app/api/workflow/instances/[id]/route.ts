@@ -30,11 +30,13 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const session = await requirePermission(request, "write");
-    validateCsrf(request, session);
     const { id } = await context.params;
     const body = await readJson(request);
     const action = (body?.action as string) ?? "advance";
+    // Resubmit is a starter-only action; students may not hold the global
+    // write permission, so we gate it with read + engine-level ownership checks.
+    const session = await requirePermission(request, action === "resubmit" ? "read" : "write");
+    validateCsrf(request, session);
     if (action === "resubmit") {
       const result = await engine.resubmit(id, session.user.id);
       await writeAudit({ userId: session.user.id, action: "resubmit_workflow", resourceType: "workflow_instance", resourceId: id, ip: requestIp(request) });
