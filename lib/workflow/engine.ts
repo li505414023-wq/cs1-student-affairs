@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq, and, inArray, count } from "drizzle-orm";
 import { getDb } from "@/db";
-import { workflowInstances, workflowTasks, workflowEventLog, workflowModels, notifications } from "@/db/schema";
+import { workflowInstances, workflowTasks, workflowEventLog, workflowModels, notifications, businessRecords } from "@/db/schema";
 import { evaluate } from "./expression";
 import { canOperateTask, isFullAccessRole } from "./access";
 import { WorkflowError } from "./types";
@@ -147,6 +147,7 @@ export class WorkflowEngine {
         .update(workflowInstances)
         .set({ status: "已拒绝", currentNodeId: null, completedAt: new Date() })
         .where(eq(workflowInstances.id, input.instanceId));
+      await this.syncRecordStatus(input.instanceId, "已驳回");
       return { status: "已拒绝", currentNodeId: null };
     }
 
@@ -187,6 +188,7 @@ export class WorkflowEngine {
     if (updated.length === 0) throw new WorkflowError("流程不在运行中，无法撤回", 409);
 
     await this.logEvent(instanceId, "", "instance_cancel", userId);
+    await this.syncRecordStatus(instanceId, "已撤回");
   }
 
   /**
@@ -329,6 +331,22 @@ export class WorkflowEngine {
 
   // --- Private helpers ---
 
+  /**
+   * Propagate a terminal instance status to the linked business record.
+   */
+  private async syncRecordStatus(instanceId: string, recordStatus: string) {
+    const [instance] = await this.db
+      .select({ recordId: workflowInstances.recordId })
+      .from(workflowInstances)
+      .where(eq(workflowInstances.id, instanceId))
+      .limit(1);
+    if (!instance?.recordId) return;
+    await this.db
+      .update(businessRecords)
+      .set({ status: recordStatus, updatedAt: new Date() })
+      .where(eq(businessRecords.id, instance.recordId));
+  }
+
   private async transitionToNext(instanceId: string, currentNodeId: string, nodes: Array<Record<string, unknown>>) {
     const currentNode = nodes.find((n) => n.id === currentNodeId);
     if (!currentNode) return;
@@ -344,6 +362,7 @@ export class WorkflowEngine {
         .set({ status: "已完成", currentNodeId: null, completedAt: new Date() })
         .where(eq(workflowInstances.id, instanceId));
       await this.logEvent(instanceId, "end", "instance_complete", "");
+      await this.syncRecordStatus(instanceId, "已通过");
       return;
     }
 
@@ -389,6 +408,7 @@ export class WorkflowEngine {
         .update(workflowInstances)
         .set({ status: "已完成", currentNodeId: null, completedAt: new Date() })
         .where(eq(workflowInstances.id, instanceId));
+      await this.syncRecordStatus(instanceId, "已通过");
       return;
     }
 

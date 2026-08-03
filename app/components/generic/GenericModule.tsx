@@ -49,7 +49,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
           id: item.id,
           status: item.status ?? "",
           // Workflow tables expose record id/status as business columns
-          ...(presentation.variant === "workflow" ? { 申请编号: String(item.id).slice(0, 8), 当前节点: item.workflow?.node ?? "", 审核状态: item.workflow?.status ?? item.status ?? "" } : {}),
+          ...(presentation.variant === "workflow" ? { 申请编号: String(item.id).slice(0, 8), 当前节点: item.workflow?.node ?? "", 审核状态: item.status ?? item.workflow?.status ?? "" } : {}),
           ...item.data,
         })));
         setTotalRecords(payload.data.pagination?.total ?? payload.data.items.length);
