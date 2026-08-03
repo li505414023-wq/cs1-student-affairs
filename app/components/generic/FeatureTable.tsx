@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 
-export function FeatureTable({ featureId, feature, columns, rows, rowAction, onView, onExport, onRefresh, onColumns, isLoading }: {
+export function FeatureTable({ featureId, feature, columns, rows, rowAction, onView, onResubmit, onExport, onRefresh, onColumns, isLoading }: {
   featureId: string; feature: string; columns: string[]; rows: Array<Record<string, string | number>>;
-  rowAction?: string; onView: (row: Record<string, string | number>) => void; onExport: () => void; onRefresh: () => void; onColumns: () => void;
+  rowAction?: string; onView: (row: Record<string, string | number>) => void; onResubmit?: (row: Record<string, string | number>) => void; onExport: () => void; onRefresh: () => void; onColumns: () => void;
   isLoading?: boolean;
 }) {
   const [currentPage, setCurrentPage] = useState(1);
@@ -49,7 +49,12 @@ export function FeatureTable({ featureId, feature, columns, rows, rowAction, onV
                       ) : row[column]}
                     </td>
                   ))}
-                  <td data-label="操作"><button className="link-button" onClick={() => onView(row)}>{rowAction ?? "查看"}</button></td>
+                  <td data-label="操作">
+                    <button className="link-button" onClick={() => onView(row)}>{rowAction ?? "查看"}</button>
+                    {onResubmit && row["审核状态"] === "退回待修改" && (
+                      <button className="link-button" onClick={() => onResubmit(row)}>重新提交</button>
+                    )}
+                  </td>
                 </tr>
               ))
             )}

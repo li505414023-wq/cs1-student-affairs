@@ -44,12 +44,12 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
     fetch(`/api/records/${featureId}?page=${page}&pageSize=${RECORDS_PAGE_SIZE}`, { credentials: "same-origin" })
       .then(async (response) => {
         if (!response.ok) { setNotice("数据加载失败，请重试"); return; }
-        const payload = await response.json() as { data: { items: Array<{ id: string; status?: string; data: Record<string, string | number>; workflow?: { node: string; status: string } | null }>; pagination?: { total: number } } };
+        const payload = await response.json() as { data: { items: Array<{ id: string; status?: string; data: Record<string, string | number>; workflow?: { node: string; status: string; instanceId: string } | null }>; pagination?: { total: number } } };
         setPersistedRows(payload.data.items.map((item) => ({
           id: item.id,
           status: item.status ?? "",
           // Workflow tables expose record id/status as business columns
-          ...(presentation.variant === "workflow" ? { 申请编号: String(item.id).slice(0, 8), 当前节点: item.workflow?.node ?? "", 审核状态: item.status ?? item.workflow?.status ?? "" } : {}),
+          ...(presentation.variant === "workflow" ? { 申请编号: String(item.id).slice(0, 8), 当前节点: item.workflow?.node ?? "", 审核状态: item.status ?? item.workflow?.status ?? "", 流程实例ID: item.workflow?.instanceId ?? "" } : {}),
           ...item.data,
         })));
         setTotalRecords(payload.data.pagination?.total ?? payload.data.items.length);
@@ -141,6 +141,24 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
     setNotice(recordMode === "create" ? `${feature}记录已保存` : `${feature}处理结果已提交`);
   };
 
+  const resubmitRecord = async (row: Record<string, string | number>) => {
+    const instanceId = String(row["流程实例ID"] ?? "");
+    if (!instanceId) { setNotice("该记录没有可重新提交流程"); return; }
+    try {
+      const response = await fetch(`/api/workflow/instances/${instanceId}`, {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+        body: JSON.stringify({ action: "resubmit" }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) { setNotice(payload.error ?? "重新提交失败"); return; }
+      setNotice(`${feature}已重新提交审批`);
+      fetchRecords();
+    } catch {
+      setNotice("网络异常，重新提交未完成，请重试");
+    }
+  };
+
   if (recordMode) {
     const rowData = selectedRow && recordMode === "view"
       ? { status: String(selectedRow.status ?? ""), data: Object.fromEntries(Object.entries(selectedRow).filter(([key]) => key !== "id" && key !== "status")) }
@@ -205,6 +223,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
         featureId={featureId} feature={feature} columns={columns} rows={filteredRows} rowAction={presentation.rowAction}
         isLoading={isLoading}
         onView={(row) => { setSelectedRow(row); setRecordMode("view"); }}
+        onResubmit={presentation.variant === "workflow" ? resubmitRecord : undefined}
         onExport={() => { downloadCsv(`${feature}.csv`, columns, filteredRows.map((row) => columns.map((column) => String(row[column] ?? "")))); }}
         onRefresh={() => { fetchRecords(); setFilterDraft({}); setAppliedFilters({}); }}
         onColumns={() => setShowColumns(true)}

@@ -35,6 +35,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const { id } = await context.params;
     const body = await readJson(request);
     const action = (body?.action as string) ?? "advance";
+    if (action === "resubmit") {
+      const result = await engine.resubmit(id, session.user.id);
+      await writeAudit({ userId: session.user.id, action: "resubmit_workflow", resourceType: "workflow_instance", resourceId: id, ip: requestIp(request) });
+      return ok(result);
+    }
     const result = await engine.advance({
       instanceId: id,
       nodeId: String(body?.nodeId ?? ""),

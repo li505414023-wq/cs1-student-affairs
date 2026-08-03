@@ -1,4 +1,4 @@
-export type WorkflowStatus = "运行中" | "已完成" | "已拒绝" | "已撤回" | "已挂起" | "已过期";
+export type WorkflowStatus = "运行中" | "已完成" | "已拒绝" | "已撤回" | "已挂起" | "已过期" | "退回待修改";
 
 export type NodeAction = "submit" | "approve" | "reject" | "return" | "auto";
 

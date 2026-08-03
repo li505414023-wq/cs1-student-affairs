@@ -63,7 +63,7 @@ export class WorkflowEngine {
    * Resolve the current workflow node name for a set of business records.
    * Returns a map of recordId -> { node, status } for records that started a flow.
    */
-  async nodesForRecords(recordIds: string[]): Promise<Record<string, { node: string; status: string }>> {
+  async nodesForRecords(recordIds: string[]): Promise<Record<string, { node: string; status: string; instanceId: string }>> {
     if (recordIds.length === 0) return {};
     const instances = await this.db.select().from(workflowInstances).where(inArray(workflowInstances.recordId, recordIds));
     if (instances.length === 0) return {};
@@ -77,13 +77,13 @@ export class WorkflowEngine {
       }
       nodeNameByModel.set(model.id, map);
     }
-    const result: Record<string, { node: string; status: string }> = {};
+    const result: Record<string, { node: string; status: string; instanceId: string }> = {};
     for (const instance of instances) {
       if (!instance.recordId) continue;
       const node = instance.status !== "运行中"
         ? instance.status
         : nodeNameByModel.get(instance.modelId)?.get(instance.currentNodeId ?? "") ?? "审核中";
-      result[instance.recordId] = { node, status: instance.status };
+      result[instance.recordId] = { node, status: instance.status, instanceId: instance.id };
     }
     return result;
   }
@@ -141,14 +141,27 @@ export class WorkflowEngine {
     // Log
     await this.logEvent(input.instanceId, input.nodeId, `node_${input.action}`, input.userId);
 
-    // Handle rejection/return
-    if (input.action === "reject" || input.action === "return") {
+    // Handle rejection — terminal state
+    if (input.action === "reject") {
       await this.db
         .update(workflowInstances)
         .set({ status: "已拒绝", currentNodeId: null, completedAt: new Date() })
         .where(eq(workflowInstances.id, input.instanceId));
       await this.syncRecordStatus(input.instanceId, "已驳回");
       return { status: "已拒绝", currentNodeId: null };
+    }
+
+    // Handle return — send back to the starter for revision, instance stays open
+    if (input.action === "return") {
+      const startNode = nodes.find((n: Record<string, unknown>) => n.type === "start") ?? nodes[0];
+      await this.db
+        .update(workflowInstances)
+        .set({ status: "退回待修改", currentNodeId: (startNode?.id as string) ?? null, completedAt: null })
+        .where(eq(workflowInstances.id, input.instanceId));
+      await this.logEvent(input.instanceId, input.nodeId, "instance_returned", input.userId);
+      await this.syncRecordStatus(input.instanceId, "退回待修改");
+      await this.notifyStarter(input.instanceId, "审批结果: 退回修改", `流程被退回，请修改后重新提交${input.comment ? `（${input.comment}）` : ""}`);
+      return { status: "退回待修改", currentNodeId: (startNode?.id as string) ?? null };
     }
 
     // Transition to next node
@@ -162,6 +175,50 @@ export class WorkflowEngine {
       .limit(1);
 
     return { status: updated?.status as WorkflowStatus, currentNodeId: updated?.currentNodeId ?? null };
+  }
+
+  /**
+   * Resubmit an instance that was returned for revision.
+   * Only the original starter may resubmit; the flow restarts from the start node.
+   */
+  async resubmit(instanceId: string, userId: string): Promise<{ status: WorkflowStatus }> {
+    const [instance] = await this.db
+      .select()
+      .from(workflowInstances)
+      .where(eq(workflowInstances.id, instanceId))
+      .limit(1);
+
+    if (!instance) throw new Error("Instance not found");
+    if (instance.status !== "退回待修改") throw new WorkflowError("流程未被退回，无法重新提交", 409);
+    if (instance.startedBy !== userId) throw new WorkflowError("只有发起人可以重新提交", 403);
+
+    const [model] = await this.db
+      .select()
+      .from(workflowModels)
+      .where(eq(workflowModels.key, instance.modelKey))
+      .limit(1);
+
+    const nodes = (model?.nodesJson as Array<Record<string, unknown>>) ?? [];
+    const startNode = nodes.find((n: Record<string, unknown>) => n.type === "start") ?? nodes[0];
+
+    await this.db
+      .update(workflowInstances)
+      .set({ status: "运行中", currentNodeId: (startNode?.id as string) ?? null, completedAt: null })
+      .where(eq(workflowInstances.id, instanceId));
+
+    await this.logEvent(instanceId, (startNode?.id as string) ?? "", "instance_resubmit", userId);
+    await this.syncRecordStatus(instanceId, "已提交");
+
+    if (nodes.length > 0) {
+      await this.transitionToNext(instanceId, startNode?.id as string, nodes);
+    }
+
+    const [updated] = await this.db
+      .select({ status: workflowInstances.status })
+      .from(workflowInstances)
+      .where(eq(workflowInstances.id, instanceId))
+      .limit(1);
+    return { status: (updated?.status ?? "运行中") as WorkflowStatus };
   }
 
   /**
@@ -330,6 +387,22 @@ export class WorkflowEngine {
   }
 
   // --- Private helpers ---
+
+  /**
+   * Notify the instance starter with a custom message (best-effort).
+   */
+  private async notifyStarter(instanceId: string, title: string, content: string) {
+    try {
+      const [instance] = await this.db.select({ title: workflowInstances.title, startedBy: workflowInstances.startedBy }).from(workflowInstances).where(eq(workflowInstances.id, instanceId)).limit(1);
+      if (instance?.startedBy) {
+        await this.db.insert(notifications).values({
+          id: randomUUID(), userId: instance.startedBy, type: "task_completed",
+          title, content: `${instance.title ?? "流程实例"} — ${content}`,
+          relatedId: instanceId,
+        });
+      }
+    } catch { /* notification failure is non-critical */ }
+  }
 
   /**
    * Propagate a terminal instance status to the linked business record.
