@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq, and, inArray, count } from "drizzle-orm";
+import { eq, and, inArray, count, getTableColumns } from "drizzle-orm";
 import { getDb } from "@/db";
 import { workflowInstances, workflowTasks, workflowEventLog, workflowModels, notifications, businessRecords } from "@/db/schema";
 import { evaluate } from "./expression";
@@ -237,12 +237,20 @@ export class WorkflowEngine {
     }
 
     // Status-conditioned update guards against concurrent cancel/complete races.
+    // Instances returned for edits (退回待修改) may also be withdrawn by the starter
+    // or an admin instead of being resubmitted.
     const updated = await this.db
       .update(workflowInstances)
       .set({ status: "已撤回", currentNodeId: null, completedAt: new Date() })
-      .where(and(eq(workflowInstances.id, instanceId), eq(workflowInstances.status, "运行中")))
+      .where(and(eq(workflowInstances.id, instanceId), inArray(workflowInstances.status, ["运行中", "退回待修改"])))
       .returning({ id: workflowInstances.id });
-    if (updated.length === 0) throw new WorkflowError("流程不在运行中，无法撤回", 409);
+    if (updated.length === 0) throw new WorkflowError("流程不在可撤回状态，无法撤回", 409);
+
+    // Close any dangling tasks so cancelled instances never leave orphaned work items.
+    await this.db
+      .update(workflowTasks)
+      .set({ status: "已取消", completedAt: new Date() })
+      .where(and(eq(workflowTasks.instanceId, instanceId), inArray(workflowTasks.status, ["待签收", "待处理"])));
 
     await this.logEvent(instanceId, "", "instance_cancel", userId);
     await this.syncRecordStatus(instanceId, "已撤回");
@@ -311,41 +319,45 @@ export class WorkflowEngine {
 
   /**
    * Get pending tasks for a user — matches by role tags AND direct user assignment.
+   * Only tasks belonging to running instances are returned; tasks of cancelled or
+   * finished instances are hidden so approvers never see orphaned work items.
    */
   async getTodo(userId: string, role: string, roleTags: string[] = []) {
+    const taskColumns = getTableColumns(workflowTasks);
     // School-wide roles see every pending task; others match by user/role/tags
-    const base = this.db.select().from(workflowTasks).where(
-      isFullAccessRole(role)
-        ? eq(workflowTasks.status, "待处理")
-        : and(
-            eq(workflowTasks.status, "待处理"),
-            inArray(workflowTasks.assigneeValue, [userId, role, ...roleTags].filter(Boolean)),
-          ),
-    );
-    return base.orderBy(workflowTasks.createdAt);
+    return this.db
+      .select(taskColumns)
+      .from(workflowTasks)
+      .innerJoin(workflowInstances, eq(workflowTasks.instanceId, workflowInstances.id))
+      .where(
+        and(
+          eq(workflowTasks.status, "待处理"),
+          eq(workflowInstances.status, "运行中"),
+          ...(isFullAccessRole(role)
+            ? []
+            : [inArray(workflowTasks.assigneeValue, [userId, role, ...roleTags].filter(Boolean))]),
+        ),
+      )
+      .orderBy(workflowTasks.createdAt);
   }
 
   /**
    * Get claimable (待签收) tasks matching the user's role or role tags.
+   * Like getTodo, only tasks of running instances are surfaced.
    */
   async getClaimable(role: string, roleTags: string[] = []) {
-    // School-wide roles may claim any awaiting task
-    if (isFullAccessRole(role)) {
-      return this.db
-        .select()
-        .from(workflowTasks)
-        .where(eq(workflowTasks.status, "待签收"))
-        .orderBy(workflowTasks.createdAt);
-    }
-    const matchValues = [role, ...roleTags].filter(Boolean);
-    if (matchValues.length === 0) return [];
+    const taskColumns = getTableColumns(workflowTasks);
+    const matchValues = isFullAccessRole(role) ? [] : [role, ...roleTags].filter(Boolean);
+    if (!isFullAccessRole(role) && matchValues.length === 0) return [];
     return this.db
-      .select()
+      .select(taskColumns)
       .from(workflowTasks)
+      .innerJoin(workflowInstances, eq(workflowTasks.instanceId, workflowInstances.id))
       .where(
         and(
           eq(workflowTasks.status, "待签收"),
-          inArray(workflowTasks.assigneeValue, matchValues),
+          eq(workflowInstances.status, "运行中"),
+          ...(isFullAccessRole(role) ? [] : [inArray(workflowTasks.assigneeValue, matchValues)]),
         ),
       )
       .orderBy(workflowTasks.createdAt);

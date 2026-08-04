@@ -153,6 +153,11 @@ function AppShell() {
   };
 
   const { activeSystem, activeGroup, sidebarOpen, currentGroups, active } = nav;
+  // Students see their own record page under a friendlier name than “学生管理”.
+  const pageTitle =
+    auth !== null && auth !== "loading" && auth.user.role === "student" && active?.id === "students"
+      ? "我的档案"
+      : active?.label ?? "学生管理";
 
   // Not logged in: show login panel
   if (auth === null) {
@@ -182,7 +187,7 @@ function AppShell() {
             <div className="page-heading">
               <div>
                 <p className="eyebrow">{systems.find((s) => s.id === activeSystem)?.label} / {currentGroups.find((g) => g.id === activeGroup)?.label}</p>
-                <h1>{active?.label ?? "学生管理"}</h1>
+                <h1>{pageTitle}</h1>
               </div>
               <div className="heading-actions">
                 <div className="business-steps" aria-label="业务主线">{workflow.map((step) => <span key={step}>{step}</span>)}</div>
