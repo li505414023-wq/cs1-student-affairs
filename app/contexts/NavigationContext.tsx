@@ -84,8 +84,13 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const navigateToFeature = useCallback((featureId: string) => {
-    const group = systemGroups.student.find((g) => g.children.some((child) => child.features.some((f) => f.id === featureId)));
-    setActiveSystem("student");
+    // 在所有子系统中查找目标功能（首页快捷入口可能跨系统跳转）。
+    const systemId = (Object.keys(systemGroups) as SystemId[]).find((id) =>
+      systemGroups[id].some((g) => g.children.some((child) => child.features.some((f) => f.id === featureId))),
+    );
+    const targetSystem = systemId ?? "student";
+    const group = systemGroups[targetSystem].find((g) => g.children.some((child) => child.features.some((f) => f.id === featureId)));
+    setActiveSystem(targetSystem);
     setActiveGroup(group?.id ?? "student");
     setActiveFeature(featureId);
     setExpanded(new Set([group?.id ?? "student"]));

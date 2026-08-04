@@ -13,14 +13,14 @@ export function Sidebar() {
   return (
     <>
       {sidebarOpen && <div className="sidebar-overlay" aria-hidden="true" onClick={() => setSidebarOpen(false)} />}
+      <nav className="mobile-system-switcher" aria-label="移动端系统切换">
+        {systems.filter((system) => allowedSystems.some((s) => s.id === system.id)).map((system) => (
+          <button key={system.id} className={activeSystem === system.id ? "active" : ""} onClick={() => switchSystem(system.id)}>
+            {system.shortLabel}
+          </button>
+        ))}
+      </nav>
       <aside className={`sidebar${sidebarOpen ? " is-open" : ""}`}>
-        <nav className="mobile-system-switcher" aria-label="移动端系统切换">
-          {systems.filter((system) => allowedSystems.some((s) => s.id === system.id)).map((system) => (
-            <button key={system.id} className={activeSystem === system.id ? "active" : ""} onClick={() => switchSystem(system.id)}>
-              {system.shortLabel}
-            </button>
-          ))}
-        </nav>
         <div className="sidebar-title">
           {systems.find((system) => system.id === activeSystem)?.shortLabel}功能导航{" "}
           <span>{currentGroups.reduce((count, group) => count + group.children.flatMap((child) => child.features).length, 0)} 项</span>

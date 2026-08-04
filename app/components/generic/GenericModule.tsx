@@ -20,6 +20,11 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
   const [recordMode, setRecordMode] = useState<"create" | "view" | "edit" | null>(null);
   const [filterDraft, setFilterDraft] = useState<Record<string, string>>({});
   const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({});
+  const [filtersOpen, setFiltersOpen] = useState(true);
+  useEffect(() => {
+    // 移动端默认收起筛选，桌面端保持展开（effect 在水合后运行，避免 SSR 不一致）。
+    if (window.matchMedia("(max-width: 680px)").matches) setFiltersOpen(false);
+  }, []);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
   const [showColumns, setShowColumns] = useState(false);
   const [showGenericImport, setShowGenericImport] = useState(false);
@@ -92,6 +97,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
   // Only show real data — no demo rows mixed in
   const tableRows = persistedRows;
   const filteredRows = useMemo<Array<Record<string, string | number>>>(() => filterTableRows(tableRows, appliedFilters), [tableRows, appliedFilters]);
+  const activeFilterCount = Object.values(appliedFilters).filter((value) => value && value !== "全部").length;
 
   const importRecords = async (rows: Array<Record<string, string>>) => {
     setShowGenericImport(false);
@@ -236,6 +242,12 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
         </div>
       )}
 
+      <div className="filter-toggle-row">
+        <button className="ghost" type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((v) => !v)}>
+          {filtersOpen ? "收起筛选" : `展开筛选${activeFilterCount > 0 ? `（${activeFilterCount} 个条件）` : ""}`}
+        </button>
+      </div>
+      {filtersOpen && (
       <form className="module-filter" onSubmit={(event) => { event.preventDefault(); setAppliedFilters({ ...filterDraft }); }}>
         {presentation.filters.map((filter) => {
           const options = filterOptionsFor(filter);
@@ -256,6 +268,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
         <button className="primary" type="submit">搜索</button>
         <button className="ghost" type="button" onClick={() => { setFilterDraft({}); setAppliedFilters({}); }}>清空</button>
       </form>
+      )}
 
       {presentation.variant === "statistics" && stats && <StatisticsOverview feature={feature} total={stats.total} byStatus={stats.byStatus} sums={stats.sums} />}
 

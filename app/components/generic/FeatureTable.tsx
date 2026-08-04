@@ -26,9 +26,9 @@ export function FeatureTable({ featureId, feature, columns, rows, rowAction, onV
       <div className="feature-table-head">
         <strong>{feature}记录</strong>
         <div className="round-actions">
-          <button aria-label="导出" onClick={onExport}>↓</button>
-          <button aria-label="刷新" onClick={onRefresh} disabled={isLoading}>↻</button>
-          <button aria-label="列设置" onClick={onColumns}>⚙</button>
+          <button aria-label="导出" title="导出 CSV" onClick={onExport}>↓</button>
+          <button aria-label="刷新" title="刷新" onClick={onRefresh} disabled={isLoading}>↻</button>
+          <button aria-label="列设置" title="列设置" onClick={onColumns}>⚙</button>
         </div>
       </div>
       <div className="table-scroll">
