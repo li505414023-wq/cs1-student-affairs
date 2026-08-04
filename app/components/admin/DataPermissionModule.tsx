@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 
 type RoleRow = { id: string; code: string; name: string; dataScope: string; builtin: boolean; status: string; userCount: number };
+type BindingRow = { id: string; userId: string; faculty: string | null; className: string; grade: string | null };
+type CounselorOption = { id: string; displayName: string; role: string; roleTags: string[] | null };
+type ClassOption = { name: string; grade: string };
 
 const SCOPES = [
   { value: "all", label: "全部数据", description: "可访问全校范围的数据" },
@@ -23,6 +26,13 @@ export function DataPermissionModule({ csrfToken }: { csrfToken: string }) {
   const [notice, setNotice] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  const [bindings, setBindings] = useState<BindingRow[]>([]);
+  const [counselors, setCounselors] = useState<CounselorOption[]>([]);
+  const [classes, setClasses] = useState<ClassOption[]>([]);
+  const [selectedCounselor, setSelectedCounselor] = useState("");
+  const [selectedClass, setSelectedClass] = useState("");
+  const [bindingBusy, setBindingBusy] = useState(false);
+
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -37,7 +47,75 @@ export function DataPermissionModule({ csrfToken }: { csrfToken: string }) {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  const loadBindings = useCallback(async () => {
+    try {
+      const [bindingRes, counselorRes, classRes] = await Promise.all([
+        fetch("/api/counselor-classes", { credentials: "same-origin" }),
+        fetch("/api/admin/users?role=counselor&pageSize=100", { credentials: "same-origin" }),
+        fetch("/api/records/classes?pageSize=100", { credentials: "same-origin" }),
+      ]);
+      if (bindingRes.ok) {
+        const payload = await bindingRes.json() as { data: BindingRow[] };
+        setBindings(payload.data);
+      }
+      if (counselorRes.ok) {
+        const payload = await counselorRes.json() as { data: { items: CounselorOption[] } };
+        setCounselors(payload.data.items);
+      }
+      if (classRes.ok) {
+        // 班级与警务区队统一存于 business_records(feature_id=classes)，同名班级/区队去重。
+        const payload = await classRes.json() as { data: { items: Array<{ data?: Record<string, string> }> } };
+        const seen = new Map<string, ClassOption>();
+        for (const row of payload.data.items ?? []) {
+          const name = row.data?.["班级名称"] ?? "";
+          if (name && !seen.has(name)) seen.set(name, { name, grade: row.data?.["所属年级"] ?? "" });
+        }
+        setClasses([...seen.values()]);
+      }
+    } catch {
+      /* 绑定面板加载失败不阻塞角色配置区 */
+    }
+  }, []);
+
+  useEffect(() => { void load(); void loadBindings(); }, [load, loadBindings]);
+
+  const counselorName = (userId: string) => counselors.find((c) => c.id === userId)?.displayName ?? userId;
+
+  const addBinding = async () => {
+    if (!selectedCounselor || !selectedClass) { setNotice("请选择辅导员和班级后再绑定"); return; }
+    setBindingBusy(true);
+    try {
+      const counselor = counselors.find((c) => c.id === selectedCounselor);
+      const faculty = counselor?.roleTags?.find((tag) => tag !== "辅导员") ?? "";
+      const classItem = classes.find((c) => c.name === selectedClass);
+      const grade = classItem?.grade ?? "";
+      const response = await fetch("/api/counselor-classes", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+        body: JSON.stringify({ userId: selectedCounselor, className: selectedClass, faculty, grade }),
+      });
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) { setNotice(payload?.error ?? "绑定失败"); return; }
+      setNotice(`已绑定 ${counselor?.displayName ?? "辅导员"} → ${selectedClass}`);
+      setSelectedCounselor(""); setSelectedClass("");
+      void loadBindings();
+    } catch { setNotice("网络异常,绑定未完成"); } finally { setBindingBusy(false); }
+  };
+
+  const removeBinding = async (binding: BindingRow) => {
+    if (!window.confirm(`确认解除 ${counselorName(binding.userId)} 与 ${binding.className} 的绑定？`)) return;
+    setBindingBusy(true);
+    try {
+      const response = await fetch("/api/counselor-classes", {
+        method: "DELETE", credentials: "same-origin",
+        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+        body: JSON.stringify({ id: binding.id }),
+      });
+      if (!response.ok) { setNotice("解除绑定失败"); return; }
+      setNotice(`已解除 ${binding.className} 的绑定`);
+      void loadBindings();
+    } catch { setNotice("网络异常,解除绑定未完成"); } finally { setBindingBusy(false); }
+  };
 
   const setScope = async (role: RoleRow, dataScope: string) => {
     setBusyId(role.id);
@@ -93,6 +171,41 @@ export function DataPermissionModule({ csrfToken }: { csrfToken: string }) {
           </table>
         </div>
       </div>
+
+      <section style={{ margin: 16, padding: 16, borderRadius: 10, border: "1px solid var(--color-border, #e5e7eb)", background: "var(--color-surface-muted, #f8fafc)" }}>
+        <strong>辅导员-班级绑定</strong>
+        <p style={{ margin: "6px 0 10px", opacity: 0.75 }}>辅导员与院系管理员的学生/业务记录数据范围按此绑定限制到所带班级；未绑定任何班级的辅导员看不到学生数据。</p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+          <select value={selectedCounselor} onChange={(event) => setSelectedCounselor(event.target.value)} style={{ padding: 6 }} aria-label="选择辅导员">
+            <option value="">选择辅导员…</option>
+            {counselors.map((c) => <option key={c.id} value={c.id}>{c.displayName}（{c.roleTags?.filter((tag) => tag !== "辅导员").join("/") || "未设院系"}）</option>)}
+          </select>
+          <select value={selectedClass} onChange={(event) => setSelectedClass(event.target.value)} style={{ padding: 6 }} aria-label="选择班级">
+            <option value="">选择班级/区队…</option>
+            {classes.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+          </select>
+          <button className="primary" type="button" disabled={bindingBusy} onClick={() => void addBinding()}>添加绑定</button>
+        </div>
+        <div className="table-card">
+          <div className="table-scroll">
+            <table>
+              <thead><tr><th>辅导员</th><th>班级/区队</th><th>院系</th><th>年级</th><th>操作</th></tr></thead>
+              <tbody>
+                {bindings.length === 0 && <tr><td colSpan={5} style={{ textAlign: "center", padding: 20, opacity: 0.6 }}>暂无绑定，请在上方添加</td></tr>}
+                {bindings.map((binding) => (
+                  <tr key={binding.id}>
+                    <td><strong>{counselorName(binding.userId)}</strong></td>
+                    <td>{binding.className}</td>
+                    <td>{binding.faculty ?? "—"}</td>
+                    <td>{binding.grade ?? "—"}</td>
+                    <td><button className="link-button" type="button" disabled={bindingBusy} onClick={() => void removeBinding(binding)}>解除绑定</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
       <section style={{ margin: 16, padding: 16, borderRadius: 10, border: "1px solid var(--color-border, #e5e7eb)", background: "var(--color-surface-muted, #f8fafc)" }}>
         <strong>当前实际生效的行级隔离规则(代码内置)</strong>

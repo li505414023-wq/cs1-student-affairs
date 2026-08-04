@@ -25,11 +25,12 @@ export const STUDENT_APPLY_FEATURES: ReadonlySet<string> = new Set([
 export const FEATURE_MODEL_MAP: Readonly<Record<string, string>> = {
   leave: "leave",
   grants: "grants",
-  "dorm-checkin": "declare",
-  "dorm-transfer": "declare",
-  "dorm-checkout": "declare",
-  "holiday-dorm": "declare",
-  "delayed-checkout": "declare",
+  // 宿舍类申请统一走已部署的住宿申办流程（模型 key 必须与 workflow_models 一致）。
+  "dorm-checkin": "dorm-checkin",
+  "dorm-transfer": "dorm-checkin",
+  "dorm-checkout": "dorm-checkin",
+  "holiday-dorm": "dorm-checkin",
+  "delayed-checkout": "dorm-checkin",
 };
 
 export function isStudentApplyFeature(featureId: string): boolean {
