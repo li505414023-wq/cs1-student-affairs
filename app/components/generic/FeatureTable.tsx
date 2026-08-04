@@ -8,7 +8,7 @@ export function FeatureTable({ featureId, feature, columns, rows, rowAction, onV
   isLoading?: boolean;
 }) {
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 20;
+  const [pageSize, setPageSize] = useState(20);
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const pageRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
@@ -63,7 +63,9 @@ export function FeatureTable({ featureId, feature, columns, rows, rowAction, onV
       </div>
       <footer className="pagination">
         <span>共 {rows.length} 条记录</span>
-        <select aria-label="每页条数" disabled><option value={pageSize}>每页 {pageSize} 条</option></select>
+        <select aria-label="每页条数" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setCurrentPage(1); }}>
+          {[10, 20, 50].map((size) => <option key={size} value={size}>每页 {size} 条</option>)}
+        </select>
         <button disabled={safePage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>‹</button>
         {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
           const start = Math.max(1, Math.min(safePage - 3, totalPages - 6));
