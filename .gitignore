@@ -47,3 +47,4 @@ next-env.d.ts
 
 # npm debug logs
 /.npm/
+patrol-*.png

@@ -19,6 +19,8 @@ export function ApplicationRecordForm({ featureId, feature, currentUser, formFie
     discipline: [{ label: "违纪类型", required: true, type: "select", options: ["校纪校规", "考试纪律", "宿舍纪律"] }, { label: "违纪时间", required: true, type: "date" }, { label: "违纪地点", required: true }, { label: "违纪事实", required: true, type: "textarea" }],
     "club-apply": [{ label: "社团名称", required: true }, { label: "社团类别", required: true, type: "select", options: ["学术科技", "文化体育", "公益实践"] }, { label: "指导教师", required: true }, { label: "社团简介", required: true, type: "textarea" }],
     "student-card": [{ label: "申办类型", required: true, type: "select", options: ["遗失补办", "损坏换发"] }, { label: "申请原因", required: true, type: "textarea" }],
+    // 手册:接到处分决定书之日起10日内可向学申委提出书面申诉(服务端校验时限)。
+    appeal: [{ label: "处分类型", required: true, type: "select", options: ["警告", "严重警告", "记过", "留校察看", "开除学籍"] }, { label: "处分决定书日期", required: true, type: "date" }, { label: "申诉理由", required: true, type: "textarea" }],
   };
 
   // Use FormDesigner fields when available, otherwise fall back to hardcoded domain fields

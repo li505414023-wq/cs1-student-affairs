@@ -10,6 +10,8 @@ export const STUDENT_APPLY_FEATURES: ReadonlySet<string> = new Set([
   "leave",
   "student-card",
   "club-apply",
+  // 手册赋予学生的处分申诉权:接到决定书10日内可提交申诉。
+  "appeal",
   "dorm-checkin",
   "dorm-transfer",
   "dorm-checkout",

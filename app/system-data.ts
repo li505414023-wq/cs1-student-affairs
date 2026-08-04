@@ -51,6 +51,7 @@ export const featureGroups: FeatureGroup[] = [
       { label: "学生干部", features: [{ id: "student-cadre", label: "学生干部管理", stage: "review" }] },
       { label: "节假日去向", features: [{ id: "return-school", label: "返校管理", stage: "review" }, { id: "holiday", label: "节假日管理", stage: "config" }] },
       { label: "投诉管理", features: [{ id: "complaints", label: "投诉管理", stage: "review" }] },
+      { label: "处分申诉", features: [{ id: "appeal", label: "处分申诉", stage: "apply" }] },
     ],
   },
   {

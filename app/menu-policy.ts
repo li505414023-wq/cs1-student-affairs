@@ -47,6 +47,7 @@ const STUDENT_VISIBLE_FEATURES: ReadonlySet<string> = new Set([
   "scholarship",
   "club-apply",
   "return-school",
+  "appeal",
 ]);
 
 export function isFeatureVisible(featureId: string, role: string): boolean {
