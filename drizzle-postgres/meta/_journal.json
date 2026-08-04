@@ -36,6 +36,13 @@
       "when": 1785725042866,
       "tag": "0004_misty_the_fallen",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785990000000,
+      "tag": "0005_add_counselor_major",
+      "breakpoints": true
     }
   ]
 }

@@ -222,6 +222,7 @@ export const counselorClasses = pgTable("counselor_classes", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   faculty: text("faculty").notNull(),
+  major: text("major").notNull().default(""),
   className: text("class_name").notNull(),
   grade: text("grade"),
   ...timestamps,

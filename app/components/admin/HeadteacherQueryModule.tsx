@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 type HeadteacherRow = {
   id: string;
   faculty: string;
+  major: string;
   className: string;
   grade: string | null;
   teacherName: string;
@@ -63,13 +64,14 @@ export function HeadteacherQueryModule() {
       <div className="table-card">
         <div className="table-scroll">
           <table>
-            <thead><tr><th>学院</th><th>班级</th><th>年级</th><th>班主任</th><th>账号</th><th>联系电话</th><th>账号状态</th><th>绑定时间</th></tr></thead>
+            <thead><tr><th>学院</th><th>专业</th><th>班级</th><th>年级</th><th>班主任</th><th>账号</th><th>联系电话</th><th>账号状态</th><th>绑定时间</th></tr></thead>
             <tbody>
-              {isLoading && <tr><td colSpan={8} style={{ textAlign: "center", padding: 32 }}>加载中…</td></tr>}
-              {!isLoading && rows.length === 0 && <tr><td colSpan={8}><div className="empty-state">暂无任职记录</div></td></tr>}
+              {isLoading && <tr><td colSpan={9} style={{ textAlign: "center", padding: 32 }}>加载中…</td></tr>}
+              {!isLoading && rows.length === 0 && <tr><td colSpan={9}><div className="empty-state">暂无任职记录</div></td></tr>}
               {!isLoading && rows.map((row) => (
                 <tr key={row.id}>
                   <td>{row.faculty || "—"}</td>
+                  <td>{row.major || "—"}</td>
                   <td><strong>{row.className}</strong></td>
                   <td>{row.grade ?? "—"}</td>
                   <td>{row.teacherName}</td>

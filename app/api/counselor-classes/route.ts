@@ -25,13 +25,14 @@ export async function POST(request: NextRequest) {
     const body = await readJson(request);
     const userId = typeof body?.userId === "string" ? body.userId : "";
     const faculty = typeof body?.faculty === "string" ? body.faculty : "";
+    const major = typeof body?.major === "string" ? body.major : "";
     const className = typeof body?.className === "string" ? body.className : "";
     const grade = typeof body?.grade === "string" ? body.grade : "";
 
     if (!userId || !className) throw new ApiError(422, "userId 和 className 为必填");
     const id = randomUUID();
-    await getDb().insert(counselorClasses).values({ id, userId, faculty, className, grade: grade || undefined });
-    return ok({ id, userId, className, faculty }, 201);
+    await getDb().insert(counselorClasses).values({ id, userId, faculty, major, className, grade: grade || undefined });
+    return ok({ id, userId, className, faculty, major }, 201);
   } catch (error) {
     return fail(error, request);
   }

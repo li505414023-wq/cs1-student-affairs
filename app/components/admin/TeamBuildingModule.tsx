@@ -11,7 +11,7 @@ type TeamRow = {
   roleTags: string[];
   phone: string | null;
   active: boolean;
-  classes: Array<{ faculty: string; className: string }>;
+  classes: Array<{ faculty: string; major: string; className: string }>;
 };
 
 function roleLabel(code: string) {

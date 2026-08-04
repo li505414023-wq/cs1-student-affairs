@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 
 type RoleRow = { id: string; code: string; name: string; dataScope: string; builtin: boolean; status: string; userCount: number };
-type BindingRow = { id: string; userId: string; faculty: string | null; className: string; grade: string | null };
+type BindingRow = { id: string; userId: string; faculty: string | null; major?: string | null; className: string; grade: string | null };
 type CounselorOption = { id: string; displayName: string; role: string; roleTags: string[] | null };
-type ClassOption = { name: string; grade: string };
+type ClassOption = { name: string; grade: string; faculty: string; major: string };
 
 const SCOPES = [
   { value: "all", label: "全部数据", description: "可访问全校范围的数据" },
@@ -30,6 +30,8 @@ export function DataPermissionModule({ csrfToken }: { csrfToken: string }) {
   const [counselors, setCounselors] = useState<CounselorOption[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [selectedCounselor, setSelectedCounselor] = useState("");
+  const [selectedFaculty, setSelectedFaculty] = useState("");
+  const [selectedMajor, setSelectedMajor] = useState("");
   const [selectedClass, setSelectedClass] = useState("");
   const [bindingBusy, setBindingBusy] = useState(false);
 
@@ -68,7 +70,7 @@ export function DataPermissionModule({ csrfToken }: { csrfToken: string }) {
         const seen = new Map<string, ClassOption>();
         for (const row of payload.data.items ?? []) {
           const name = row.data?.["班级名称"] ?? "";
-          if (name && !seen.has(name)) seen.set(name, { name, grade: row.data?.["所属年级"] ?? "" });
+          if (name && !seen.has(name)) seen.set(name, { name, grade: row.data?.["所属年级"] ?? "", faculty: row.data?.["院系名称"] ?? "", major: row.data?.["专业名称"] ?? "" });
         }
         setClasses([...seen.values()]);
       }
@@ -81,23 +83,27 @@ export function DataPermissionModule({ csrfToken }: { csrfToken: string }) {
 
   const counselorName = (userId: string) => counselors.find((c) => c.id === userId)?.displayName ?? userId;
 
+  // 组织层级：院系 → 专业 → 区队（班级），级联筛选
+  const facultyOptions = [...new Set(classes.map((c) => c.faculty).filter(Boolean))];
+  const majorOptions = [...new Set(classes.filter((c) => c.faculty === selectedFaculty).map((c) => c.major).filter(Boolean))];
+  const classOptions = classes.filter((c) => c.faculty === selectedFaculty && c.major === selectedMajor);
+
   const addBinding = async () => {
-    if (!selectedCounselor || !selectedClass) { setNotice("请选择辅导员和班级后再绑定"); return; }
+    if (!selectedCounselor || !selectedFaculty || !selectedMajor || !selectedClass) { setNotice("请依次选择辅导员、院系、专业、区队后再绑定"); return; }
     setBindingBusy(true);
     try {
       const counselor = counselors.find((c) => c.id === selectedCounselor);
-      const faculty = counselor?.roleTags?.find((tag) => tag !== "辅导员") ?? "";
       const classItem = classes.find((c) => c.name === selectedClass);
       const grade = classItem?.grade ?? "";
       const response = await fetch("/api/counselor-classes", {
         method: "POST", credentials: "same-origin",
         headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ userId: selectedCounselor, className: selectedClass, faculty, grade }),
+        body: JSON.stringify({ userId: selectedCounselor, className: selectedClass, faculty: selectedFaculty, major: selectedMajor, grade }),
       });
       const payload = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) { setNotice(payload?.error ?? "绑定失败"); return; }
-      setNotice(`已绑定 ${counselor?.displayName ?? "辅导员"} → ${selectedClass}`);
-      setSelectedCounselor(""); setSelectedClass("");
+      setNotice(`已绑定 ${counselor?.displayName ?? "辅导员"} → ${selectedFaculty}/${selectedMajor}/${selectedClass}`);
+      setSelectedCounselor(""); setSelectedFaculty(""); setSelectedMajor(""); setSelectedClass("");
       void loadBindings();
     } catch { setNotice("网络异常,绑定未完成"); } finally { setBindingBusy(false); }
   };
@@ -173,30 +179,39 @@ export function DataPermissionModule({ csrfToken }: { csrfToken: string }) {
       </div>
 
       <section style={{ margin: 16, padding: 16, borderRadius: 10, border: "1px solid var(--color-border, #e5e7eb)", background: "var(--color-surface-muted, #f8fafc)" }}>
-        <strong>辅导员-班级绑定</strong>
-        <p style={{ margin: "6px 0 10px", opacity: 0.75 }}>辅导员与院系管理员的学生/业务记录数据范围按此绑定限制到所带班级；未绑定任何班级的辅导员看不到学生数据。</p>
+        <strong>辅导员-区队绑定</strong>
+        <p style={{ margin: "6px 0 10px", opacity: 0.75 }}>组织层级：院系 → 专业 → 区队。辅导员与院系管理员的数据范围按此绑定限制到所带区队；未绑定任何区队的辅导员看不到学生数据。</p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
           <select value={selectedCounselor} onChange={(event) => setSelectedCounselor(event.target.value)} style={{ padding: 6 }} aria-label="选择辅导员">
             <option value="">选择辅导员…</option>
             {counselors.map((c) => <option key={c.id} value={c.id}>{c.displayName}（{c.roleTags?.filter((tag) => tag !== "辅导员").join("/") || "未设院系"}）</option>)}
           </select>
-          <select value={selectedClass} onChange={(event) => setSelectedClass(event.target.value)} style={{ padding: 6 }} aria-label="选择班级">
-            <option value="">选择班级/区队…</option>
-            {classes.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+          <select value={selectedFaculty} onChange={(event) => { setSelectedFaculty(event.target.value); setSelectedMajor(""); setSelectedClass(""); }} style={{ padding: 6 }} aria-label="选择院系">
+            <option value="">选择院系…</option>
+            {facultyOptions.map((faculty) => <option key={faculty} value={faculty}>{faculty}</option>)}
+          </select>
+          <select value={selectedMajor} onChange={(event) => { setSelectedMajor(event.target.value); setSelectedClass(""); }} disabled={!selectedFaculty} style={{ padding: 6 }} aria-label="选择专业">
+            <option value="">选择专业…</option>
+            {majorOptions.map((major) => <option key={major} value={major}>{major}</option>)}
+          </select>
+          <select value={selectedClass} onChange={(event) => setSelectedClass(event.target.value)} disabled={!selectedMajor} style={{ padding: 6 }} aria-label="选择区队">
+            <option value="">选择区队…</option>
+            {classOptions.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
           </select>
           <button className="primary" type="button" disabled={bindingBusy} onClick={() => void addBinding()}>添加绑定</button>
         </div>
         <div className="table-card">
           <div className="table-scroll">
             <table>
-              <thead><tr><th>辅导员</th><th>班级/区队</th><th>院系</th><th>年级</th><th>操作</th></tr></thead>
+              <thead><tr><th>辅导员</th><th>院系</th><th>专业</th><th>区队</th><th>年级</th><th>操作</th></tr></thead>
               <tbody>
-                {bindings.length === 0 && <tr><td colSpan={5} style={{ textAlign: "center", padding: 20, opacity: 0.6 }}>暂无绑定，请在上方添加</td></tr>}
+                {bindings.length === 0 && <tr><td colSpan={6} style={{ textAlign: "center", padding: 20, opacity: 0.6 }}>暂无绑定，请在上方添加</td></tr>}
                 {bindings.map((binding) => (
                   <tr key={binding.id}>
                     <td><strong>{counselorName(binding.userId)}</strong></td>
-                    <td>{binding.className}</td>
                     <td>{binding.faculty ?? "—"}</td>
+                    <td>{binding.major || "—"}</td>
+                    <td>{binding.className}</td>
                     <td>{binding.grade ?? "—"}</td>
                     <td><button className="link-button" type="button" disabled={bindingBusy} onClick={() => void removeBinding(binding)}>解除绑定</button></td>
                   </tr>

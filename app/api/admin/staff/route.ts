@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
       const rows = await db.select({
         id: counselorClasses.id,
         faculty: counselorClasses.faculty,
+        major: counselorClasses.major,
         className: counselorClasses.className,
         grade: counselorClasses.grade,
         teacherName: users.displayName,
@@ -60,12 +61,13 @@ export async function GET(request: NextRequest) {
     const bindings = await db.select({
       userId: counselorClasses.userId,
       faculty: counselorClasses.faculty,
+      major: counselorClasses.major,
       className: counselorClasses.className,
     }).from(counselorClasses);
-    const classesByUser = new Map<string, Array<{ faculty: string; className: string }>>();
+    const classesByUser = new Map<string, Array<{ faculty: string; major: string; className: string }>>();
     for (const binding of bindings) {
       const list = classesByUser.get(binding.userId) ?? [];
-      list.push({ faculty: binding.faculty, className: binding.className });
+      list.push({ faculty: binding.faculty, major: binding.major, className: binding.className });
       classesByUser.set(binding.userId, list);
     }
 
