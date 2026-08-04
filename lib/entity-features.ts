@@ -84,7 +84,7 @@ export const ENTITY_FEATURES: Record<string, EntityFeatureConfig> = {
     featureId: "corps-admin",
     label: "学生大队管理",
     nameLabel: "大队名称",
-    description: "维护学生大队信息,隶属系部,是区队的上级组织(院系→大队→区队)。",
+    description: "维护学生大队信息,隶属系部,一个院系只设一个大队;大队长直接管理本大队辅导员,辅导员管理自己的区队。",
     hasCode: true,
     hierarchical: { parentFeature: "faculty-admin", parentLabel: "所属系部" },
     columns: [

@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { getDb } from "@/db";
 import { counselorClasses } from "@/db/schema";
 import { requirePermission, validateCsrf } from "@/lib/auth";
+import { corpsForFaculties } from "@/lib/records-hooks";
 import { ApiError, fail, ok, readJson } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -11,8 +12,11 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   try {
     await requirePermission(request, "read");
-    const rows = await getDb().select().from(counselorClasses);
-    return ok(rows);
+    const db = getDb();
+    const rows = await db.select().from(counselorClasses);
+    // 一个院系只设一个大队,大队长直接管理本大队辅导员:按院系推导所属大队。
+    const corpsMap = await corpsForFaculties(db, rows.map((row) => row.faculty));
+    return ok(rows.map((row) => ({ ...row, corps: corpsMap.get(row.faculty) ?? "" })));
   } catch (error) {
     return fail(error, request);
   }

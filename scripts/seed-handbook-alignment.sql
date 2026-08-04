@@ -1,26 +1,31 @@
 -- 学生手册(2024)对齐种子数据
 -- ①学生大队层级 ④考勤/预警 ⑤表彰奖励参数 ⑥助学金/困难补助参数 ⑦学籍异动 ⑨押金/学生干部
 
--- ============ ① 组织架构:学生大队(院系→大队→区队) ============
+-- ============ ① 组织架构:学生大队(一个院系一个大队,大队长→辅导员→区队) ============
 INSERT INTO managed_items (id, feature_id, code, name, description, parent_code, sort_order, status, data_json)
 VALUES
-  (gen_random_uuid()::text, 'corps-admin', 'corps-001', '信息工程学院学生大队', '信息工程学院学生大队', 'fac-9a882a26', 1, '启用', '{"leader":"刘大队长","gradeRange":"2024-2026"}'),
-  (gen_random_uuid()::text, 'corps-admin', 'corps-002', '商学院学生大队', '商学院学生大队', 'fac-8c5b5f46', 2, '启用', '{"leader":"赵大队长","gradeRange":"2024-2026"}'),
-  (gen_random_uuid()::text, 'corps-admin', 'corps-003', '智能制造学院学生大队', '智能制造学院学生大队', 'fac-5b75dcbd', 3, '启用', '{"leader":"孙大队长","gradeRange":"2024-2026"}')
+  (gen_random_uuid()::text, 'corps-admin', 'corps-001', '侦查系学生大队', '侦查系学生大队', 'fac-9a882a26', 1, '启用', '{"leader":"刘大队长","gradeRange":"2024-2026"}'),
+  (gen_random_uuid()::text, 'corps-admin', 'corps-002', '治安系学生大队', '治安系学生大队', 'fac-8c5b5f46', 2, '启用', '{"leader":"赵大队长","gradeRange":"2024-2026"}'),
+  (gen_random_uuid()::text, 'corps-admin', 'corps-003', '刑侦系学生大队', '刑侦系学生大队', 'fac-5b75dcbd', 3, '启用', '{"leader":"孙大队长","gradeRange":"2024-2026"}')
 ON CONFLICT (id) DO NOTHING;
 
 -- 班级实体回填所属大队
 UPDATE managed_items SET data_json = data_json || jsonb_build_object('corps',
   CASE parent_code
-    WHEN 'maj-318404e1' THEN '信息工程学院学生大队'
-    WHEN 'maj-0f768cab' THEN '商学院学生大队'
-    WHEN 'maj-f2f6f54a' THEN '智能制造学院学生大队'
+    WHEN 'maj-318404e1' THEN '侦查系学生大队'
+    WHEN 'maj-0f768cab' THEN '治安系学生大队'
+    WHEN 'maj-f2f6f54a' THEN '刑侦系学生大队'
     ELSE '' END)
 WHERE feature_id = 'class-admin';
 
 -- 班级(区队)业务记录回填学生大队
 UPDATE business_records
-SET data_json = data_json || jsonb_build_object('学生大队', COALESCE(data_json->>'院系名称','') || '学生大队')
+SET data_json = data_json || jsonb_build_object('学生大队',
+  CASE data_json->>'院系名称'
+    WHEN '侦查系' THEN '侦查系学生大队'
+    WHEN '治安系' THEN '治安系学生大队'
+    WHEN '刑侦系' THEN '刑侦系学生大队'
+    ELSE COALESCE(data_json->>'院系名称','') || '学生大队' END)
 WHERE feature_id = 'classes';
 
 -- ============ ⑤ 表彰奖励参数校准 ============

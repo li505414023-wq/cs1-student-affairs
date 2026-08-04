@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { enrichRecordData, validateRecordBusiness } from "@/lib/records-hooks";
+import { corpsForFaculties, enrichRecordData, validateEntityUniqueness, validateRecordBusiness } from "@/lib/records-hooks";
+import type { getDb } from "@/db";
+
+type Db = ReturnType<typeof getDb>;
 
 describe("请假记录补全:审批链", () => {
   it("按请假天数写入手册审批链", () => {
@@ -35,5 +38,19 @@ describe("业务前置校验", () => {
     expect(validateRecordBusiness("status-change", { 异动类型: "休学" })).toBeNull();
     expect(validateRecordBusiness("status-change", { 异动类型: "跳级" })).toMatch("异动类型不正确");
     expect(validateRecordBusiness("status-change", {})).toBeNull();
+  });
+});
+
+describe("大队唯一性与所属大队推导", () => {
+  it("非大队实体或无系部时不触发唯一性校验", async () => {
+    const db = null as unknown as Db; // 短路分支不会访问数据库
+    await expect(validateEntityUniqueness("faculty-admin", "fac-x", db)).resolves.toBeNull();
+    await expect(validateEntityUniqueness("corps-admin", null, db)).resolves.toBeNull();
+    await expect(validateEntityUniqueness("corps-admin", "", db)).resolves.toBeNull();
+  });
+  it("无院系名称时返回空映射", async () => {
+    const db = null as unknown as Db;
+    await expect(corpsForFaculties(db, [])).resolves.toEqual(new Map());
+    await expect(corpsForFaculties(db, ["", ""])).resolves.toEqual(new Map());
   });
 });

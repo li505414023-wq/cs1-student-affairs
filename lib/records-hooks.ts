@@ -1,7 +1,7 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { getDb } from "@/db";
-import { businessRecords, students } from "@/db/schema";
+import { businessRecords, managedItems, students } from "@/db/schema";
 import {
   ABSENCE_PER_HOUR_DEDUCTION,
   absencePunishment,
@@ -68,6 +68,41 @@ function leaveDays(data: Record<string, unknown>): number | null {
   const end = new Date(str(data["结束时间"] || data["结束日期"]));
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
   return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+}
+
+/**
+ * 实体维护的业务规则:一个院系只设一个学生大队(院系→大队 1:1)。
+ * 返回 null 表示通过,否则返回错误信息。
+ */
+export async function validateEntityUniqueness(featureId: string, parentCode: string | null | undefined, db: Db, excludeId?: string): Promise<string | null> {
+  if (featureId !== "corps-admin" || !parentCode) return null;
+  const conditions = [eq(managedItems.featureId, "corps-admin"), eq(managedItems.parentCode, parentCode)];
+  if (excludeId) conditions.push(ne(managedItems.id, excludeId));
+  const [existing] = await db.select({ name: managedItems.name }).from(managedItems).where(and(...conditions)).limit(1);
+  if (existing) return "一个院系只能设置一个学生大队,该系部已存在大队,请直接编辑现有大队";
+  return null;
+}
+
+/**
+ * 按院系名称返回所属大队(院系→大队 1:1)。
+ * 大队长直接管理本大队辅导员,辅导员管理自己的区队。
+ */
+export async function corpsForFaculties(db: Db, facultyNames: string[]): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  const names = [...new Set(facultyNames.filter(Boolean))];
+  if (names.length === 0) return result;
+  const faculties = await db.select({ code: managedItems.code, name: managedItems.name })
+    .from(managedItems).where(eq(managedItems.featureId, "faculty-admin"));
+  const codeByName = new Map(faculties.filter((f) => names.includes(f.name)).map((f) => [f.name, f.code]));
+  if (codeByName.size === 0) return result;
+  const corps = await db.select({ parentCode: managedItems.parentCode, name: managedItems.name })
+    .from(managedItems).where(and(eq(managedItems.featureId, "corps-admin"), inArray(managedItems.parentCode, [...codeByName.values()])));
+  const corpsByCode = new Map(corps.map((c) => [c.parentCode ?? "", c.name]));
+  for (const [name, code] of codeByName) {
+    const corpsName = corpsByCode.get(code);
+    if (corpsName) result.set(name, corpsName);
+  }
+  return result;
 }
 
 const ABSENCE_FEATURES = ["class-attendance", "evening-rollcall", "morning-exercise"];

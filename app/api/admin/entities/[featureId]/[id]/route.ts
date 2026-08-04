@@ -5,6 +5,7 @@ import { managedItems } from "@/db/schema";
 import { requirePermission, validateCsrf } from "@/lib/auth";
 import { ENTITY_FEATURE_IDS, getEntityConfig } from "@/lib/entity-features";
 import { validateEntityInput } from "@/lib/validation-entities";
+import { validateEntityUniqueness } from "@/lib/records-hooks";
 import { ApiError, fail, isUniqueViolation, ok, readJson, requestIp, writeAudit } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -24,6 +25,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ fea
     const validated = validateEntityInput(config, await readJson(request));
     if (!validated.success) throw new ApiError(422, "数据校验失败", validated.errors);
     const { code, name, description, parentCode, sortOrder, status, data } = validated.data;
+
+    const businessError = await validateEntityUniqueness(featureId, parentCode, db, id);
+    if (businessError) throw new ApiError(422, businessError);
 
     try {
       await db.update(managedItems).set({

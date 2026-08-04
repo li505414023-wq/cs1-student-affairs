@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 type RoleRow = { id: string; code: string; name: string; dataScope: string; builtin: boolean; status: string; userCount: number };
-type BindingRow = { id: string; userId: string; faculty: string | null; major?: string | null; className: string; grade: string | null };
+type BindingRow = { id: string; userId: string; faculty: string | null; major?: string | null; className: string; grade: string | null; corps?: string | null };
 type CounselorOption = { id: string; displayName: string; role: string; roleTags: string[] | null };
 type ClassOption = { name: string; grade: string; faculty: string; major: string };
 
@@ -83,7 +83,7 @@ export function DataPermissionModule({ csrfToken }: { csrfToken: string }) {
 
   const counselorName = (userId: string) => counselors.find((c) => c.id === userId)?.displayName ?? userId;
 
-  // 组织层级：院系 → 专业 → 区队（班级），级联筛选
+  // 组织层级：院系 → 大队 → 专业 → 区队（班级），级联筛选（一个院系只设一个大队）
   const facultyOptions = [...new Set(classes.map((c) => c.faculty).filter(Boolean))];
   const majorOptions = [...new Set(classes.filter((c) => c.faculty === selectedFaculty).map((c) => c.major).filter(Boolean))];
   const classOptions = classes.filter((c) => c.faculty === selectedFaculty && c.major === selectedMajor);
@@ -180,7 +180,7 @@ export function DataPermissionModule({ csrfToken }: { csrfToken: string }) {
 
       <section style={{ margin: 16, padding: 16, borderRadius: 10, border: "1px solid var(--color-border, #e5e7eb)", background: "var(--color-surface-muted, #f8fafc)" }}>
         <strong>辅导员-区队绑定</strong>
-        <p style={{ margin: "6px 0 10px", opacity: 0.75 }}>组织层级：院系 → 专业 → 区队。辅导员与院系管理员的数据范围按此绑定限制到所带区队；未绑定任何区队的辅导员看不到学生数据。</p>
+        <p style={{ margin: "6px 0 10px", opacity: 0.75 }}>组织层级：院系 → 学生大队 → 专业 → 区队，一个院系只设一个大队；大队长直接管理本大队辅导员，辅导员管理自己的区队。辅导员与院系管理员的数据范围按此绑定限制到所带区队；未绑定任何区队的辅导员看不到学生数据。</p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
           <select value={selectedCounselor} onChange={(event) => setSelectedCounselor(event.target.value)} style={{ padding: 6 }} aria-label="选择辅导员">
             <option value="">选择辅导员…</option>
@@ -203,13 +203,14 @@ export function DataPermissionModule({ csrfToken }: { csrfToken: string }) {
         <div className="table-card">
           <div className="table-scroll">
             <table>
-              <thead><tr><th>辅导员</th><th>院系</th><th>专业</th><th>区队</th><th>年级</th><th>操作</th></tr></thead>
+              <thead><tr><th>辅导员</th><th>院系</th><th>所属大队</th><th>专业</th><th>区队</th><th>年级</th><th>操作</th></tr></thead>
               <tbody>
-                {bindings.length === 0 && <tr><td colSpan={6} style={{ textAlign: "center", padding: 20, opacity: 0.6 }}>暂无绑定，请在上方添加</td></tr>}
+                {bindings.length === 0 && <tr><td colSpan={7} style={{ textAlign: "center", padding: 20, opacity: 0.6 }}>暂无绑定，请在上方添加</td></tr>}
                 {bindings.map((binding) => (
                   <tr key={binding.id}>
                     <td><strong>{counselorName(binding.userId)}</strong></td>
                     <td>{binding.faculty ?? "—"}</td>
+                    <td>{binding.corps || "—"}</td>
                     <td>{binding.major || "—"}</td>
                     <td>{binding.className}</td>
                     <td>{binding.grade ?? "—"}</td>
