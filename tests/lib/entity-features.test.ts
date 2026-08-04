@@ -3,9 +3,9 @@ import { ENTITY_FEATURE_IDS, getEntityConfig, isEntityFeature } from "@/lib/enti
 import { buildEntityDataSchema, validateEntityInput } from "@/lib/validation-entities";
 
 describe("entity feature registry", () => {
-  it("registers the 17 engine-backed features", () => {
-    expect(ENTITY_FEATURE_IDS).toHaveLength(17);
-    for (const id of ["faculty-admin", "major-admin", "class-admin", "org-admin", "post-admin",
+  it("registers the 18 engine-backed features", () => {
+    expect(ENTITY_FEATURE_IDS).toHaveLength(18);
+    for (const id of ["faculty-admin", "major-admin", "corps-admin", "class-admin", "org-admin", "post-admin",
       "system-dict", "business-dict", "menu-admin", "top-menu", "flow-category", "flow-button",
       "form-default", "flow-expression", "home-carousel", "announcement", "campus-news", "process-agent"]) {
       expect(ENTITY_FEATURE_IDS).toContain(id);

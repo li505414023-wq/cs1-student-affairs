@@ -10,6 +10,7 @@ import { isStudentApplyFeature, modelKeyForFeature } from "@/lib/feature-policy"
 import { recordScopeConditions } from "@/lib/records-scope";
 import { ApiError, fail, ok, readJson, requestIp, writeAudit } from "@/lib/api";
 import { validateRecordInput } from "@/lib/validation";
+import { afterRecordCreated, enrichRecordData, validateRecordAgainstDb, validateRecordBusiness } from "@/lib/records-hooks";
 
 export const runtime = "nodejs";
 
@@ -58,10 +59,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ fe
 
     const validated = validateRecordInput(await readJson(request));
     if (!validated.success) throw new ApiError(422, "业务数据校验失败", validated.errors);
+    // 手册业务规则:前置校验(如申诉时限)+数据补全(如请假审批链)。
+    const businessError = validateRecordBusiness(featureId, validated.data.data);
+    if (businessError) throw new ApiError(422, businessError);
+    const db = getDb();
+    const dbError = await validateRecordAgainstDb(featureId, validated.data.data, db);
+    if (dbError) throw new ApiError(422, dbError);
+    const enriched = enrichRecordData(featureId, validated.data.data as Record<string, string | number>);
     const id = randomUUID();
     const status = studentApply ? "已提交" : validated.data.status;
-    await getDb().insert(businessRecords).values({ id, featureId, dataJson: validated.data.data, status, createdBy: session.user.id });
+    await db.insert(businessRecords).values({ id, featureId, dataJson: enriched, status, createdBy: session.user.id });
     await writeAudit({ userId: session.user.id, action: "create", resourceType: featureId, resourceId: id, ip: requestIp(request) });
+    // 记录间联动(处分→操行分、旷课→预警、学籍异动→学籍状态),失败不阻断主流程。
+    try { await afterRecordCreated(featureId, enriched as Record<string, string | number>, db, session.user.id); } catch {}
 
     // Student applications start the matching approval flow when a model exists.
     let instanceId: string | null = null;
@@ -69,7 +79,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ fe
       try {
         instanceId = await new WorkflowEngine().start(
           modelKeyForFeature(featureId),
-          { ...validated.data.data, applicant: session.user.displayName },
+          { ...enriched, applicant: session.user.displayName },
           session.user.id,
           id,
         );
@@ -80,7 +90,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ fe
       }
     }
 
-    return ok({ id, featureId, status, data: validated.data.data, instanceId }, 201);
+    return ok({ id, featureId, status, data: enriched, instanceId }, 201);
   } catch (error) {
     return fail(error, request);
   }

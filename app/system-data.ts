@@ -47,6 +47,8 @@ export const featureGroups: FeatureGroup[] = [
       { label: "学生请假", features: [{ id: "leave", label: "请假管理", stage: "apply" }, { id: "leave-type", label: "请假类型", stage: "config" }] },
       { label: "学生销假", features: [{ id: "leave-cancel", label: "销假管理", stage: "review" }] },
       { label: "学生证补办", features: [{ id: "student-card", label: "学生证管理", stage: "apply" }] },
+      { label: "学籍异动", features: [{ id: "status-change", label: "学籍异动管理", stage: "review" }] },
+      { label: "学生干部", features: [{ id: "student-cadre", label: "学生干部管理", stage: "review" }] },
       { label: "节假日去向", features: [{ id: "return-school", label: "返校管理", stage: "review" }, { id: "holiday", label: "节假日管理", stage: "config" }] },
       { label: "投诉管理", features: [{ id: "complaints", label: "投诉管理", stage: "review" }] },
     ],
@@ -120,6 +122,7 @@ export const dormFeatureGroups: FeatureGroup[] = [
     { label: "楼栋管理", features: [{ id: "dorm-building", label: "楼栋管理", stage: "config" }] },
     { label: "宿舍管理", features: [{ id: "dorm-room", label: "宿舍管理", stage: "config" }] },
     { label: "入住情况", features: [{ id: "dorm-occupancy", label: "入住情况", stage: "archive" }] },
+    { label: "押金管理", features: [{ id: "dorm-deposit", label: "宿舍押金管理", stage: "review" }] },
   ] },
   { id: "dorm-allocation", label: "学生排宿", icon: "排", children: [
     { label: "批次管理", features: [{ id: "dorm-batch", label: "批量排宿", stage: "batch" }] },
@@ -151,6 +154,7 @@ export const dormFeatureGroups: FeatureGroup[] = [
 
 export const policeFeatureGroups: FeatureGroup[] = [
   { id: "police-org", label: "组织架构", icon: "队", children: [
+    { label: "学生大队", features: [{ id: "corps-admin", label: "学生大队管理", stage: "config" }] },
     // 公安院校的区队即班级，复用班级管理（classes）同一套数据与后端。
     { label: "区队管理", features: [{ id: "classes", label: "区队管理", stage: "config" }] },
   ] },
@@ -158,6 +162,11 @@ export const policeFeatureGroups: FeatureGroup[] = [
     { label: "早操管理", features: [{ id: "morning-exercise", label: "早操考勤", stage: "review" }] },
     { label: "警容风纪", features: [{ id: "appearance-inspection", label: "警容风纪检查", stage: "review" }] },
     { label: "操行分", features: [{ id: "conduct-score", label: "操行分登记", stage: "review" }, { id: "conduct-score-stats", label: "操行分统计", stage: "archive" }] },
+    { label: "课堂考勤", features: [{ id: "class-attendance", label: "课前集队考勤", stage: "review" }, { id: "evening-rollcall", label: "晚点名考勤", stage: "review" }, { id: "absence-warning", label: "旷课累计预警", stage: "archive" }] },
+  ] },
+  { id: "police-eval", label: "综合素质", icon: "评", children: [
+    { label: "课程成绩", features: [{ id: "course-scores", label: "课程成绩管理", stage: "review" }] },
+    { label: "综合素质考核", features: [{ id: "comprehensive-eval", label: "综合素质考核", stage: "archive" }] },
   ] },
   { id: "police-training", label: "体能训练", icon: "训", children: [
     { label: "体能测试", features: [{ id: "physical-test", label: "体测记录", stage: "review" }] },

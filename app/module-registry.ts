@@ -21,6 +21,7 @@ const LazyOpsScheduleModule = lazy(() => import("./components/admin/OpsScheduleM
 const LazySystemLogModule = lazy(() => import("./components/admin/SystemLogModule").then((m) => ({ default: m.SystemLogModule })));
 const LazyAuditLogModule = lazy(() => import("./components/admin/AuditLogModule").then((m) => ({ default: m.AuditLogModule })));
 const LazyGenericModule = lazy(() => import("./components/generic/GenericModule").then((m) => ({ default: m.GenericModule })));
+const LazyComprehensiveEvalModule = lazy(() => import("./components/police/ComprehensiveEvalModule").then((m) => ({ default: m.ComprehensiveEvalModule })));
 
 /** Module category determines which props the Workspace should pass. */
 export type ModuleCategory = "entity" | "admin-csrf" | "admin-plain" | "log" | "generic" | "shell";
@@ -48,6 +49,9 @@ register("ops-schedule", LazyOpsScheduleModule, "admin-csrf");
 register("api-permission", LazyApiPermissionModule, "admin-plain");
 register("team-building", LazyTeamBuildingModule, "admin-plain");
 register("headteacher-query", LazyHeadteacherQueryModule, "admin-plain");
+
+// 警务化管理:综合素质考核(实时聚合模块,无需 csrf)
+register("comprehensive-eval", LazyComprehensiveEvalModule, "admin-plain");
 
 // Log modules
 register("usual-log", LazyAuditLogModule, "log", "通用日志");
