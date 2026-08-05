@@ -1,5 +1,8 @@
 export type WorkflowStatus = "运行中" | "已完成" | "已拒绝" | "已撤回" | "已挂起" | "已过期" | "退回待修改";
 
+/** 流程实例终态：已到达不可逆终点（通过/拒绝/撤回取消），不应再被申请人改删。 */
+export const TERMINAL_WORKFLOW_STATUSES: WorkflowStatus[] = ["已完成", "已拒绝", "已撤回"];
+
 export type NodeAction = "submit" | "approve" | "reject" | "return" | "auto";
 
 export type TaskStatus = "待签收" | "待处理" | "已完成" | "已跳过" | "已过期";

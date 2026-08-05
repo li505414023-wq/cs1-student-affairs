@@ -72,14 +72,23 @@ export async function PUT(request: NextRequest) {
       if (!allowShrink && existing >= 3 && incoming < Math.ceil(existing * 0.5)) {
         throw new ApiError(409, `${label}数量骤降（现有 ${existing}，本次提交 ${incoming}），已拒绝同步。确认无误后请附带 allowShrink: true 重试`);
       }
+      // Empty-array wipe guard: an empty payload must never silently clear
+      // existing definitions (typical symptom of an unloaded frontend state).
+      if (!allowShrink && incoming === 0 && existing > 0) {
+        throw new ApiError(400, `${label}同步数据为空但系统中已有 ${existing} 条数据，已拒绝清空。确认无误后请附带 allowShrink: true 重试`);
+      }
     };
-    checkShrink(forms.length, Number(formsRow?.value ?? 0), "表单");
-    checkShrink(models.length, Number(modelsRow?.value ?? 0), "流程模型");
-    checkShrink(deployments.length, Number(deploymentsRow?.value ?? 0), "部署");
-    // Note: still DELETE ALL + INSERT per table (skipped when the incoming array is
-    // empty). A key-based upsert is tracked as a follow-up improvement.
+    const existingForms = Number(formsRow?.value ?? 0);
+    const existingModels = Number(modelsRow?.value ?? 0);
+    const existingDeployments = Number(deploymentsRow?.value ?? 0);
+    checkShrink(forms.length, existingForms, "表单");
+    checkShrink(models.length, existingModels, "流程模型");
+    checkShrink(deployments.length, existingDeployments, "部署");
+    // Note: still DELETE ALL + INSERT per table (skipped when the incoming array
+    // is empty and there is nothing to wipe). A key-based upsert is tracked as
+    // a follow-up improvement.
     await db.transaction(async (tx) => {
-      if (forms.length > 0) {
+      if (forms.length > 0 || (allowShrink && existingForms > 0)) {
         await tx.delete(workflowForms);
         for (const item of forms as Array<Record<string, unknown>>) {
         await tx.insert(workflowForms).values({
@@ -88,7 +97,7 @@ export async function PUT(request: NextRequest) {
           fieldsJson: Array.isArray(item.fields) ? item.fields : [],
         });
       }}
-      if (models.length > 0) {
+      if (models.length > 0 || (allowShrink && existingModels > 0)) {
         await tx.delete(workflowModels);
       for (const item of models as Array<Record<string, unknown>>) {
         await tx.insert(workflowModels).values({
@@ -99,7 +108,7 @@ export async function PUT(request: NextRequest) {
           nodesJson: Array.isArray(item.nodes) ? item.nodes : [],
         });
       }}
-      if (deployments.length > 0) {
+      if (deployments.length > 0 || (allowShrink && existingDeployments > 0)) {
         await tx.delete(workflowDeployments);
       for (const item of deployments as Array<Record<string, unknown>>) {
         await tx.insert(workflowDeployments).values({

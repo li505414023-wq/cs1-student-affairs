@@ -5,6 +5,7 @@ import { workflow } from "@/app/system-data";
 import { getPresentation, filterOptionsFor } from "@/app/feature-metadata";
 import { filterTableRows } from "@/app/interaction-utils.js";
 import { downloadCsv } from "@/app/components/shared/download-csv";
+import { api, apiErrorMessage, isNetworkError } from "@/lib/api-client";
 import { FeatureTable } from "./FeatureTable";
 import { ColumnSettingsDialog } from "./ColumnSettingsDialog";
 import { StatisticsOverview } from "./StatisticsOverview";
@@ -17,6 +18,7 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
   featureId: string; feature: string; description?: string; stage?: string; csrfToken: string;
   currentUser?: CurrentUser;
 }) {
+  void csrfToken; // CSRF 由 api-client 统一携带
   const [recordMode, setRecordMode] = useState<"create" | "view" | "edit" | null>(null);
   const [filterDraft, setFilterDraft] = useState<Record<string, string>>({});
   const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({});
@@ -46,20 +48,20 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
   // Real data fetch with loading state, server-side pagination, error handling
   const fetchRecords = useCallback(() => {
     setIsLoading(true);
-    fetch(`/api/records/${featureId}?page=${page}&pageSize=${RECORDS_PAGE_SIZE}`, { credentials: "same-origin" })
-      .then(async (response) => {
-        if (!response.ok) { setNotice("数据加载失败，请重试"); return; }
-        const payload = await response.json() as { data: { items: Array<{ id: string; status?: string; data: Record<string, string | number>; workflow?: { node: string; status: string; instanceId: string } | null }>; pagination?: { total: number } } };
-        setPersistedRows(payload.data.items.map((item) => ({
+    api.get<{ items: Array<{ id: string; status?: string; data: Record<string, string | number>; workflow?: { node: string; status: string; instanceId: string } | null }>; pagination?: { total: number } }>(
+      `/api/records/${featureId}?page=${page}&pageSize=${RECORDS_PAGE_SIZE}`,
+    )
+      .then((data) => {
+        setPersistedRows(data.items.map((item) => ({
           id: item.id,
           status: item.status ?? "",
           // Workflow tables expose record id/status as business columns
           ...(presentation.variant === "workflow" ? { 申请编号: String(item.id).slice(0, 8), 当前节点: item.workflow?.node ?? "", 审核状态: item.status ?? item.workflow?.status ?? "", 流程实例ID: item.workflow?.instanceId ?? "" } : {}),
           ...item.data,
         })));
-        setTotalRecords(payload.data.pagination?.total ?? payload.data.items.length);
+        setTotalRecords(data.pagination?.total ?? data.items.length);
       })
-      .catch(() => { setNotice("网络连接异常，请检查后重试"); })
+      .catch((error) => { setNotice(isNetworkError(error) ? "网络连接异常，请检查后重试" : "数据加载失败，请重试"); })
       .finally(() => setIsLoading(false));
   }, [featureId, page, presentation.variant]);
 
@@ -67,9 +69,10 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
   useEffect(() => {
     if (presentation.variant !== "statistics") { setStats(null); return; }
     let active = true;
-    fetch(`/api/records/${featureId}/stats?columns=${encodeURIComponent(presentation.columns.join(","))}`, { credentials: "same-origin" })
-      .then(async (r) => (r.ok ? (await r.json() as { data: { total: number; byStatus: Array<{ status: string; count: number }>; sums: Record<string, number> } }).data : null))
-      .then((d) => { if (active && d) setStats(d); })
+    api.get<{ total: number; byStatus: Array<{ status: string; count: number }>; sums: Record<string, number> }>(
+      `/api/records/${featureId}/stats?columns=${encodeURIComponent(presentation.columns.join(","))}`,
+    )
+      .then((data) => { if (active) setStats(data); })
       .catch(() => {});
     return () => { active = false; };
   }, [featureId, presentation.variant]);
@@ -80,14 +83,12 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
 
   // Fetch workflow form fields for this feature (for dynamic form rendering)
   useEffect(() => {
-    fetch("/api/workflows", { credentials: "same-origin" })
-      .then(async (r) => {
-        if (!r.ok) return;
-        const payload = await r.json() as { data: { forms: Array<{ id: string; key: string; fields: Array<{ id: string; type: string; label: string; required: boolean }> }>; models: Array<{ key: string; formId: string }> } };
-        const model = payload.data.models.find((m) => m.key === featureId);
+    api.get<{ forms: Array<{ id: string; key: string; fields: Array<{ id: string; type: string; label: string; required: boolean }> }>; models: Array<{ key: string; formId: string }> }>("/api/workflows")
+      .then((data) => {
+        const model = data.models.find((m) => m.key === featureId);
         if (model) {
           setWorkflowModelKey(model.key);
-          const form = payload.data.forms.find((f) => f.id === model.formId);
+          const form = data.forms.find((f) => f.id === model.formId);
           if (form?.fields?.length) setFormFields(form.fields);
         }
       })
@@ -102,20 +103,16 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
   const importRecords = async (rows: Array<Record<string, string>>) => {
     setShowGenericImport(false);
     try {
-      const response = await fetch(`/api/records/${featureId}/batch`, {
-        method: "POST", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ records: rows.map((row) => ({ data: row, status: "已提交" })) }),
-      });
-      const payload = await response.json() as { data?: { savedCount: number; total: number; errors: Array<{ message: string }> }; error?: string };
-      if (!response.ok || !payload.data) { setNotice(payload.error ?? `${feature}批量导入失败`); return; }
-      const { savedCount, total, errors } = payload.data;
+      const { savedCount, total, errors } = await api.post<{ savedCount: number; total: number; errors: Array<{ message: string }> }>(
+        `/api/records/${featureId}/batch`,
+        { records: rows.map((row) => ({ data: row, status: "已提交" })) },
+      );
       setNotice(errors.length > 0
         ? `成功导入 ${savedCount} / ${total} 条，${errors.length} 条失败: ${errors.slice(0, 3).map((e) => e.message).join("; ")}${errors.length > 3 ? "…" : ""}`
         : `已将 ${savedCount} 条${feature}记录写入数据库`);
       fetchRecords();
-    } catch {
-      setNotice("网络异常，批量导入未完成，请重试");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常，批量导入未完成，请重试" : apiErrorMessage(error, `${feature}批量导入失败`));
     }
   };
 
@@ -123,15 +120,9 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
     // 编辑模式：更新既有记录（PUT），不新增。
     if (recordMode === "edit" && selectedRow?.id) {
       try {
-        const response = await fetch(`/api/records/${featureId}/${selectedRow.id}`, {
-          method: "PUT", credentials: "same-origin",
-          headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-          body: JSON.stringify({ data, status: String(selectedRow.status ?? "已提交") }),
-        });
-        const payload = await response.json() as { error?: string };
-        if (!response.ok) { setNotice(payload.error ?? `${feature}更新失败`); return; }
-      } catch {
-        setNotice("网络异常，更新未完成，请重试");
+        await api.put(`/api/records/${featureId}/${selectedRow.id}`, { data, status: String(selectedRow.status ?? "已提交") });
+      } catch (error) {
+        setNotice(isNetworkError(error) ? "网络异常，更新未完成，请重试" : apiErrorMessage(error, `${feature}更新失败`));
         return;
       }
       fetchRecords();
@@ -141,22 +132,17 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
       return;
     }
     const submitStatus = stage === "review" || workflowModelKey ? "已提交" : "草稿";
-    const response = await fetch(`/api/records/${featureId}`, {
-      method: "POST", credentials: "same-origin",
-      headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-      body: JSON.stringify({ data, status: submitStatus }),
-    });
-    const payload = await response.json() as { data?: { id: string; data: Record<string, string | number> }; error?: string };
-    if (!response.ok || !payload.data) { setNotice(payload.error ?? `${feature}保存失败`); return; }
+    let created: { id: string; data: Record<string, string | number> };
+    try {
+      created = await api.post(`/api/records/${featureId}`, { data, status: submitStatus });
+    } catch (error) {
+      setNotice(apiErrorMessage(error, `${feature}保存失败`));
+      return;
+    }
     // Start the approval workflow when a deployed model exists for this feature
     if (workflowModelKey && recordMode === "create") {
       try {
-        const wfResponse = await fetch("/api/workflow/instances", {
-          method: "POST", credentials: "same-origin",
-          headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-          body: JSON.stringify({ modelKey: workflowModelKey, recordId: payload.data.id, formData: data }),
-        });
-        if (!wfResponse.ok) setNotice(`${feature}记录已保存，但审批流程发起失败`);
+        await api.post("/api/workflow/instances", { modelKey: workflowModelKey, recordId: created.id, formData: data });
       } catch {
         setNotice(`${feature}记录已保存，但审批流程发起失败`);
       }
@@ -171,31 +157,20 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
     const instanceId = String(row["流程实例ID"] ?? "");
     if (!instanceId) { setNotice("该记录没有可重新提交流程"); return; }
     try {
-      const response = await fetch(`/api/workflow/instances/${instanceId}`, {
-        method: "POST", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ action: "resubmit" }),
-      });
-      const payload = await response.json() as { error?: string };
-      if (!response.ok) { setNotice(payload.error ?? "重新提交失败"); return; }
+      await api.post(`/api/workflow/instances/${instanceId}`, { action: "resubmit" });
       setNotice(`${feature}已重新提交审批`);
       fetchRecords();
-    } catch {
-      setNotice("网络异常，重新提交未完成，请重试");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常，重新提交未完成，请重试" : apiErrorMessage(error, "重新提交失败"));
     }
   };
 
   const deleteRecord = async () => {
     if (!selectedRow?.id) return;
     try {
-      const response = await fetch(`/api/records/${featureId}/${selectedRow.id}`, {
-        method: "DELETE", credentials: "same-origin",
-        headers: { "x-csrf-token": csrfToken },
-      });
-      const payload = await response.json() as { error?: string };
-      if (!response.ok) { setNotice(payload.error ?? `${feature}删除失败`); return; }
-    } catch {
-      setNotice("网络异常，删除未完成，请重试");
+      await api.del(`/api/records/${featureId}/${selectedRow.id}`);
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常，删除未完成，请重试" : apiErrorMessage(error, `${feature}删除失败`));
       return;
     }
     fetchRecords();

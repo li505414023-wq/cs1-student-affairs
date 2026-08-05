@@ -1,8 +1,10 @@
 import type { NextRequest } from "next/server";
 import { WorkflowEngine } from "@/lib/workflow/engine";
 import { isFullAccessRole } from "@/lib/workflow/access";
+import { failWorkflow } from "@/lib/workflow/api";
 import { requirePermission, validateCsrf } from "@/lib/auth";
 import { ApiError, fail, ok, readJson, requestIp, writeAudit } from "@/lib/api";
+import { parsePagination } from "@/lib/http-utils";
 
 export const runtime = "nodejs";
 
@@ -21,7 +23,7 @@ export async function POST(request: NextRequest) {
     await writeAudit({ userId: session.user.id, action: "start_workflow", resourceType: "workflow_instance", resourceId: instanceId, ip: requestIp(request) });
     return ok({ instanceId }, 201);
   } catch (error) {
-    return fail(error, request);
+    return failWorkflow(error, request);
   }
 }
 
@@ -31,8 +33,7 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const status = url.searchParams.get("status") ?? undefined;
     const modelKey = url.searchParams.get("modelKey") ?? undefined;
-    const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
-    const pageSize = Math.min(50, Math.max(1, Number(url.searchParams.get("pageSize")) || 20));
+    const { page, pageSize } = parsePagination(url, { maxPageSize: 50 });
     // Data scope: only school-wide roles may query other users' instances
     const requestedUserId = url.searchParams.get("userId") ?? undefined;
     const userId = isFullAccessRole(session.user.role) ? requestedUserId : session.user.id;

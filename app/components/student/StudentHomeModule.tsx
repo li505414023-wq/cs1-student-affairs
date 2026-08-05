@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CountUp } from "../shared/use-count-up";
+import { api, apiErrorMessage, isNetworkError } from "@/lib/api-client";
 
 type CurrentUser = { id: string; displayName: string; role: string } | null;
 
@@ -12,7 +13,7 @@ type TaskSummary = { id: string; instanceTitle: string; instanceStatus: string; 
 const STUDENT_ACTIONS: Array<{ label: string; featureId: string; description: string }> = [
   { label: "发起请假", featureId: "leave", description: "事假、病假、公假在线申请" },
   { label: "学生证补办", featureId: "student-card", description: "遗失补办、损坏换发" },
-  { label: "困难补助", featureId: "hardship", description: "查看补助申请与结果" },
+  { label: "处分申诉", featureId: "appeal", description: "接到处分决定书后提交申诉" },
   { label: "我的档案", featureId: "students", description: "查看个人学籍信息" },
 ];
 
@@ -43,6 +44,7 @@ function formatTime(value: string) {
  * Latest notifications are shared by all roles.
  */
 export function StudentHomeModule({ currentUser, csrfToken, onNavigate }: { currentUser: CurrentUser; csrfToken: string; onNavigate: (featureId: string) => void }) {
+  void csrfToken; // CSRF 由 api-client 统一携带
   const role = currentUser?.role ?? "student";
   const isStaff = role !== "student";
   const [instances, setInstances] = useState<InstanceSummary[]>([]);
@@ -54,22 +56,22 @@ export function StudentHomeModule({ currentUser, csrfToken, onNavigate }: { curr
 
   const refresh = () => {
     if (!isStaff) {
-      fetch("/api/workflow/instances?pageSize=50", { credentials: "same-origin" })
-        .then(async (r) => { if (!r.ok) return; const payload = await r.json() as { data: { items: InstanceSummary[] } }; setInstances(payload.data.items); })
+      api.get<{ items: InstanceSummary[] }>("/api/workflow/instances?pageSize=50")
+        .then((data) => setInstances(data.items))
         .catch(() => {});
     } else {
-      fetch("/api/workflow/tasks?type=todo", { credentials: "same-origin" })
-        .then(async (r) => { if (!r.ok) return; const payload = await r.json() as { data: { tasks: TaskSummary[] } }; setTasks(payload.data.tasks); })
+      api.get<{ tasks: TaskSummary[] }>("/api/workflow/tasks?type=todo")
+        .then((data) => setTasks(data.tasks))
         .catch(() => {});
-      fetch("/api/workflow/tasks?type=claim", { credentials: "same-origin" })
-        .then(async (r) => { if (!r.ok) return; const payload = await r.json() as { data: { tasks: TaskSummary[] } }; setClaimTasks(payload.data.tasks); })
+      api.get<{ tasks: TaskSummary[] }>("/api/workflow/tasks?type=claim")
+        .then((data) => setClaimTasks(data.tasks))
         .catch(() => {});
-      fetch("/api/workflow/tasks?type=done", { credentials: "same-origin" })
-        .then(async (r) => { if (!r.ok) return; const payload = await r.json() as { data: { tasks: TaskSummary[] } }; setDoneTasks(payload.data.tasks); })
+      api.get<{ tasks: TaskSummary[] }>("/api/workflow/tasks?type=done")
+        .then((data) => setDoneTasks(data.tasks))
         .catch(() => {});
     }
-    fetch("/api/notifications", { credentials: "same-origin" })
-      .then(async (r) => { if (!r.ok) return; const payload = await r.json() as { data: { items: NotificationSummary[] } }; setNotifications(payload.data.items.slice(0, 5)); })
+    api.get<{ items: NotificationSummary[] }>("/api/notifications")
+      .then((data) => setNotifications(data.items.slice(0, 5)))
       .catch(() => {});
   };
 
@@ -80,17 +82,11 @@ export function StudentHomeModule({ currentUser, csrfToken, onNavigate }: { curr
 
   const resubmit = async (instance: InstanceSummary) => {
     try {
-      const response = await fetch(`/api/workflow/instances/${instance.id}`, {
-        method: "POST", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ action: "resubmit" }),
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "重新提交失败，请重试"); return; }
+      await api.post(`/api/workflow/instances/${instance.id}`, { action: "resubmit" });
       setNotice(`已重新提交：${instance.title ?? "申请"}`);
       refresh();
-    } catch {
-      setNotice("网络异常，重新提交未完成");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常，重新提交未完成" : apiErrorMessage(error, "重新提交失败，请重试"));
     }
   };
 

@@ -8,7 +8,8 @@ import { hasPermission } from "@/lib/security";
 import { WorkflowEngine } from "@/lib/workflow/engine";
 import { isStudentApplyFeature, modelKeyForFeature } from "@/lib/feature-policy";
 import { recordScopeConditions } from "@/lib/records-scope";
-import { ApiError, fail, ok, readJson, requestIp, writeAudit } from "@/lib/api";
+import { ApiError, fail, ok, readJson, requestIp, writeAudit, writeSystemLog } from "@/lib/api";
+import { parsePagination } from "@/lib/http-utils";
 import { validateRecordInput } from "@/lib/validation";
 import { afterRecordCreated, enrichRecordData, validateRecordAgainstDb, validateRecordBusiness } from "@/lib/records-hooks";
 
@@ -25,8 +26,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ fea
     const { featureId: raw } = await context.params;
     const featureId = validFeatureId(raw);
     const url = new URL(request.url);
-    const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
-    const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("pageSize")) || 20));
+    const { page, pageSize } = parsePagination(url);
     const db = getDb();
     const conditions = [eq(businessRecords.featureId, featureId), ...(await recordScopeConditions(session))];
     const where = and(...conditions);
@@ -70,8 +70,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ fe
     const status = studentApply ? "已提交" : validated.data.status;
     await db.insert(businessRecords).values({ id, featureId, dataJson: enriched, status, createdBy: session.user.id });
     await writeAudit({ userId: session.user.id, action: "create", resourceType: featureId, resourceId: id, ip: requestIp(request) });
-    // 记录间联动(处分→操行分、旷课→预警、学籍异动→学籍状态),失败不阻断主流程。
-    try { await afterRecordCreated(featureId, enriched as Record<string, string | number>, db, session.user.id); } catch {}
+    // 记录间联动(处分→操行分、旷课→预警、学籍异动→学籍状态),失败不阻断主流程,但记入系统日志。
+    try {
+      await afterRecordCreated(featureId, enriched as Record<string, string | number>, db, session.user.id);
+    } catch (hookError) {
+      writeSystemLog({
+        message: `记录创建联动失败: ${hookError instanceof Error ? hookError.message : String(hookError)}`,
+        request,
+        detail: { featureId, recordId: id },
+      });
+    }
 
     // Student applications start the matching approval flow when a model exists.
     let instanceId: string | null = null;

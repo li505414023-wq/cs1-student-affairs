@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { filterTableRows } from "@/app/interaction-utils.js";
 import { getPresentation } from "@/app/feature-metadata";
 import { downloadCsv } from "@/app/components/shared/download-csv";
+import { api, isNetworkError } from "@/lib/api-client";
 import { FeatureTable } from "@/app/components/generic/FeatureTable";
 import { ColumnSettingsDialog } from "@/app/components/generic/ColumnSettingsDialog";
 
@@ -29,14 +30,12 @@ export function ComprehensiveEvalModule() {
 
   const fetchData = useCallback(() => {
     setIsLoading(true);
-    fetch("/api/comprehensive-eval", { credentials: "same-origin" })
-      .then(async (response) => {
-        if (!response.ok) { setNotice("考核数据加载失败,请重试"); return; }
-        const payload = await response.json() as { data: { items: EvalRow[]; term: string } };
-        setRows(payload.data.items);
-        setTerm(payload.data.term);
+    api.get<{ items: EvalRow[]; term: string }>("/api/comprehensive-eval")
+      .then((data) => {
+        setRows(data.items);
+        setTerm(data.term);
       })
-      .catch(() => setNotice("网络连接异常,请检查后重试"))
+      .catch((error) => setNotice(isNetworkError(error) ? "网络连接异常,请检查后重试" : "考核数据加载失败,请重试"))
       .finally(() => setIsLoading(false));
   }, []);
 

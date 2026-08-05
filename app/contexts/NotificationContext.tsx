@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { api } from "@/lib/api-client";
 import { useAuth } from "./AuthContext";
 
 interface NotificationContextValue {
@@ -24,13 +25,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!auth || auth === "loading") return;
     const poll = () => {
-      fetch("/api/notifications?unread=true", { credentials: "same-origin" })
-        .then(async (r) => {
-          if (r.ok) {
-            const j = await r.json() as { data: { unreadCount: number } };
-            setUnreadCount(j.data.unreadCount);
-          }
-        })
+      api.get<{ unreadCount: number }>("/api/notifications?unread=true")
+        .then((data) => setUnreadCount(data.unreadCount))
         .catch(() => {});
     };
     poll();

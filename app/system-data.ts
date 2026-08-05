@@ -229,19 +229,4 @@ export const systemGroups: Record<SystemId, FeatureGroup[]> = {
   admin: adminFeatureGroups,
 };
 
-export const students = [
-  { name: "林晓晨", no: "20260001", phone: "138****1201", gender: "女", faculty: "信息工程学院", major: "软件技术", className: "软件2601", grade: "2026", birthDate: "2008-03-12", address: "滨湖校区学生公寓" },
-  { name: "周言川", no: "20260002", phone: "139****3520", gender: "男", faculty: "信息工程学院", major: "计算机应用", className: "计应2602", grade: "2026", birthDate: "2007-11-08", address: "滨湖校区学生公寓" },
-  { name: "陈清禾", no: "20250018", phone: "136****6618", gender: "女", faculty: "商学院", major: "电子商务", className: "电商2501", grade: "2025", birthDate: "2007-05-19", address: "城南校区学生公寓" },
-  { name: "许星野", no: "20240136", phone: "137****9036", gender: "男", faculty: "智能制造学院", major: "机电一体化", className: "机电2403", grade: "2024", birthDate: "2006-09-25", address: "城南校区学生公寓" },
-  { name: "沈知夏", no: "20250107", phone: "135****5107", gender: "女", faculty: "艺术设计学院", major: "视觉传达", className: "视传2502", grade: "2025", birthDate: "2007-01-16", address: "滨湖校区学生公寓" },
-  { name: "顾明澈", no: "20260033", phone: "132****4830", gender: "男", faculty: "信息工程学院", major: "软件技术", className: "软件2601", grade: "2026", birthDate: "2008-06-21", address: "滨湖校区学生公寓" },
-  { name: "宋知遥", no: "20260046", phone: "131****7926", gender: "女", faculty: "商学院", major: "电子商务", className: "电商2602", grade: "2026", birthDate: "2008-02-14", address: "城南校区学生公寓" },
-  { name: "江予安", no: "20250128", phone: "133****2461", gender: "男", faculty: "智能制造学院", major: "机电一体化", className: "机电2501", grade: "2025", birthDate: "2007-07-03", address: "城南校区学生公寓" },
-  { name: "叶清欢", no: "20240211", phone: "134****8165", gender: "女", faculty: "艺术设计学院", major: "视觉传达", className: "视传2401", grade: "2024", birthDate: "2006-12-09", address: "滨湖校区学生公寓" },
-  { name: "陆景行", no: "20260072", phone: "135****3478", gender: "男", faculty: "信息工程学院", major: "计算机应用", className: "计应2602", grade: "2026", birthDate: "2008-04-27", address: "滨湖校区学生公寓" },
-  { name: "温书宁", no: "20250165", phone: "136****9254", gender: "女", faculty: "商学院", major: "电子商务", className: "电商2501", grade: "2025", birthDate: "2007-08-18", address: "城南校区学生公寓" },
-  { name: "程叙白", no: "20240308", phone: "137****6082", gender: "男", faculty: "智能制造学院", major: "机电一体化", className: "机电2403", grade: "2024", birthDate: "2006-10-30", address: "城南校区学生公寓" },
-];
-
 export const workflow = ["基础配置", "批次发布", "学生申请", "分级审核", "结果归档"];

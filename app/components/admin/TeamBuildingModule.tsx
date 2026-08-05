@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { BUILTIN_ROLES } from "@/lib/role-defs";
+import { api, isNetworkError } from "@/lib/api-client";
 
 type TeamRow = {
   id: string;
@@ -30,12 +31,10 @@ export function TeamBuildingModule() {
     try {
       const params = new URLSearchParams({ type: "team" });
       if (search.trim()) params.set("keyword", search.trim());
-      const response = await fetch(`/api/admin/staff?${params.toString()}`, { credentials: "same-origin" });
-      if (!response.ok) { setNotice("队伍数据加载失败,请重试"); return; }
-      const payload = await response.json() as { data: { items: TeamRow[] } };
-      setRows(payload.data.items);
-    } catch {
-      setNotice("网络连接异常,请检查后重试");
+      const data = await api.get<{ items: TeamRow[] }>(`/api/admin/staff?${params.toString()}`);
+      setRows(data.items);
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络连接异常,请检查后重试" : "队伍数据加载失败,请重试");
     } finally {
       setIsLoading(false);
     }

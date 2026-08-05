@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { api, isNetworkError } from "@/lib/api-client";
 
 type NotificationItem = {
   id: string;
@@ -28,6 +29,7 @@ export function NotificationPanel({ csrfToken, onClose, onJump, onUnreadChanged 
   onJump: (instanceId: string) => void;
   onUnreadChanged: (count: number) => void;
 }) {
+  void csrfToken; // CSRF 由 api-client 统一携带
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState("");
@@ -35,13 +37,11 @@ export function NotificationPanel({ csrfToken, onClose, onJump, onUnreadChanged 
   const refresh = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/notifications", { credentials: "same-origin" });
-      if (!response.ok) { setNotice("通知加载失败，请重试"); return; }
-      const payload = await response.json() as { data: { items: NotificationItem[]; unreadCount: number } };
-      setItems(payload.data.items);
-      onUnreadChanged(payload.data.unreadCount);
-    } catch {
-      setNotice("网络连接异常，请重试");
+      const data = await api.get<{ items: NotificationItem[]; unreadCount: number }>("/api/notifications");
+      setItems(data.items);
+      onUnreadChanged(data.unreadCount);
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络连接异常，请重试" : "通知加载失败，请重试");
     } finally {
       setIsLoading(false);
     }
@@ -51,16 +51,14 @@ export function NotificationPanel({ csrfToken, onClose, onJump, onUnreadChanged 
 
   const markRead = async (ids: string[]) => {
     try {
-      await fetch("/api/notifications", {
-        method: "PUT", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ ids }),
-      });
-      setItems((current) => current.map((item) => ids.length === 0 || ids.includes(item.id) ? { ...item, read: true } : item));
-      onUnreadChanged(ids.length === 0 ? 0 : items.filter((item) => !item.read && !ids.includes(item.id)).length);
-    } catch {
-      setNotice("网络异常，标记已读失败");
+      await api.put("/api/notifications", { ids });
+    } catch (error) {
+      if (isNetworkError(error)) { setNotice("网络异常，标记已读失败"); return; }
+      // Server rejected the update: the previous implementation ignored
+      // response.ok here and marked items read optimistically — keep that.
     }
+    setItems((current) => current.map((item) => ids.length === 0 || ids.includes(item.id) ? { ...item, read: true } : item));
+    onUnreadChanged(ids.length === 0 ? 0 : items.filter((item) => !item.read && !ids.includes(item.id)).length);
   };
 
   const openItem = async (item: NotificationItem) => {

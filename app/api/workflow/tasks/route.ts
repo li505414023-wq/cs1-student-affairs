@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { getDb } from "@/db";
 import { workflowInstances } from "@/db/schema";
 import { WorkflowEngine } from "@/lib/workflow/engine";
-import { WorkflowError } from "@/lib/workflow/types";
+import { failWorkflow } from "@/lib/workflow/api";
 import { requirePermission, validateCsrf } from "@/lib/auth";
 import { ApiError, fail, ok, readJson, writeAudit, requestIp } from "@/lib/api";
 
@@ -82,14 +82,13 @@ export async function POST(request: NextRequest) {
 
     const action = typeof body?.action === "string" ? body.action : "";
     if (action === "claim") {
-      await engine.claimTask(taskId, session.user.id);
+      await engine.claimTask(taskId, session.user.id, session.user.role, session.user.roleTags ?? []);
       await writeAudit({ userId: session.user.id, action: "claim_task", resourceType: "workflow_task", resourceId: taskId, ip: requestIp(request) });
       return ok({ claimed: true });
     }
 
     throw new ApiError(422, "不支持的操作，请使用 /api/workflow/instances/[id] 推进流程");
   } catch (error) {
-    if (error instanceof WorkflowError) return fail(new ApiError(error.status, error.message), request);
-    return fail(error, request);
+    return failWorkflow(error, request);
   }
 }

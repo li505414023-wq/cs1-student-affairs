@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 // Mock db BEFORE any imports that use it
 const mockDb = {
   insert: vi.fn(() => ({ values: vi.fn() })),
-  select: vi.fn(() => ({ from: vi.fn(() => ({ innerJoin: vi.fn(() => ({ where: vi.fn(() => ({ limit: vi.fn(() => []) })) })) })) })),
+  select: vi.fn(() => ({ from: vi.fn(() => ({ innerJoin: vi.fn(() => ({ where: vi.fn(() => ({ limit: vi.fn(() => [] as unknown[]) })) })) })) })),
   update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) })),
   delete: vi.fn(() => ({ where: vi.fn() })),
 };
@@ -203,5 +203,146 @@ describe("requirePermission", () => {
       expect(apiError.status).toBe(401);
       expect(apiError.message).toContain("登录");
     }
+  });
+});
+
+// Builds the select(...).from(...).innerJoin(...).where(...).limit(...) chain
+// used by getCurrentSession, resolving to the given rows.
+function selectChain(rows: unknown[]) {
+  return {
+    from: vi.fn(() => ({
+      innerJoin: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn(() => rows),
+        })),
+      })),
+    })),
+  };
+}
+
+function sessionRow(overrides: Record<string, unknown> = {}) {
+  const now = Date.now();
+  return {
+    id: "s1",
+    csrfToken: "csrf-1",
+    expiresAt: new Date(now + 6 * 60 * 60 * 1000),
+    createdAt: new Date(now - 60 * 60 * 1000),
+    userId: "u1",
+    username: "admin",
+    displayName: "Admin",
+    role: "admin",
+    roleTags: [],
+    active: true,
+    ...overrides,
+  };
+}
+
+function requestWithCookie() {
+  return { cookies: { get: vi.fn(() => ({ value: "tok" })) } } as unknown as import("next/server").NextRequest;
+}
+
+describe("session absolute timeout", () => {
+  it("rejects a session older than 7 days even if expiresAt is in the future", async () => {
+    const { getCurrentSession } = await import("@/lib/auth");
+    const now = Date.now();
+    mockDb.select.mockReturnValueOnce(selectChain([sessionRow({
+      createdAt: new Date(now - 8 * 24 * 60 * 60 * 1000),
+      expiresAt: new Date(now + 6 * 60 * 60 * 1000),
+    })]));
+
+    const result = await getCurrentSession(requestWithCookie());
+    expect(result).toBeNull();
+    expect(mockDb.update).not.toHaveBeenCalled();
+  });
+
+  it("caps sliding renewal at the absolute 7-day deadline", async () => {
+    const { getCurrentSession } = await import("@/lib/auth");
+    const now = Date.now();
+    const createdAt = new Date(now - (7 * 24 - 4) * 60 * 60 * 1000); // 4h left until absolute deadline
+    const set = vi.fn((_patch: { lastSeenAt: Date; expiresAt: Date }) => ({ where: vi.fn() }));
+    mockDb.update.mockReturnValueOnce({ set } as never);
+    // Remaining lifetime (1h) < half of 8h → renewal is triggered.
+    mockDb.select.mockReturnValueOnce(selectChain([sessionRow({
+      createdAt,
+      expiresAt: new Date(now + 1 * 60 * 60 * 1000),
+    })]));
+
+    const result = await getCurrentSession(requestWithCookie());
+    expect(result).not.toBeNull();
+    const absoluteDeadline = createdAt.getTime() + 7 * 24 * 60 * 60 * 1000;
+    expect(result!.expiresAt.getTime()).toBe(absoluteDeadline);
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({ expiresAt: expect.any(Date) }));
+    const renewed = set.mock.calls[0][0].expiresAt as Date;
+    expect(renewed.getTime()).toBe(absoluteDeadline);
+  });
+
+  it("renews normally when far from the absolute deadline", async () => {
+    const { getCurrentSession } = await import("@/lib/auth");
+    const now = Date.now();
+    const set = vi.fn((_patch: { lastSeenAt: Date; expiresAt: Date }) => ({ where: vi.fn() }));
+    mockDb.update.mockReturnValueOnce({ set } as never);
+    mockDb.select.mockReturnValueOnce(selectChain([sessionRow({
+      createdAt: new Date(now - 24 * 60 * 60 * 1000),
+      expiresAt: new Date(now + 2 * 60 * 60 * 1000), // < 4h remaining → renew
+    })]));
+
+    const result = await getCurrentSession(requestWithCookie());
+    expect(result).not.toBeNull();
+    const renewed = set.mock.calls[0][0].expiresAt as Date;
+    expect(renewed.getTime()).toBeGreaterThan(now + 7 * 60 * 60 * 1000);
+    expect(renewed.getTime()).toBeLessThan(now + 9 * 60 * 60 * 1000);
+  });
+});
+
+describe("CSRF constant-time comparison", () => {
+  it("rejects a token with a different byte length", async () => {
+    const { validateCsrf } = await import("@/lib/auth");
+    const request = { headers: { get: () => "token-abc-much-longer" } } as unknown as import("next/server").NextRequest;
+    const session = { id: "s1", csrfToken: "token-abc", expiresAt: new Date(), user: { id: "u-csrf-len", username: "u", displayName: "u", role: "staff", roleTags: [] } };
+    expect(() => validateCsrf(request, session)).toThrowError((await import("@/lib/api")).ApiError);
+  });
+
+  it("rejects same-length but different tokens", async () => {
+    const { validateCsrf } = await import("@/lib/auth");
+    const request = { headers: { get: () => "token-xyz" } } as unknown as import("next/server").NextRequest;
+    const session = { id: "s1", csrfToken: "token-abc", expiresAt: new Date(), user: { id: "u-csrf-diff", username: "u", displayName: "u", role: "staff", roleTags: [] } };
+    expect(() => validateCsrf(request, session)).toThrowError((await import("@/lib/api")).ApiError);
+  });
+
+  it("accepts an exact token match (including multibyte content)", async () => {
+    const { validateCsrf } = await import("@/lib/auth");
+    const request = { headers: { get: () => "令牌-token-αβγ" } } as unknown as import("next/server").NextRequest;
+    const session = { id: "s1", csrfToken: "令牌-token-αβγ", expiresAt: new Date(), user: { id: "u-csrf-ok", username: "u", displayName: "u", role: "staff", roleTags: [] } };
+    expect(() => validateCsrf(request, session)).not.toThrow();
+  });
+});
+
+describe("secure cookie enforcement", () => {
+  it("forces secure=true in production even when x-forwarded-proto claims http", async () => {
+    const { setSessionCookie } = await import("@/lib/auth");
+    vi.stubEnv("NODE_ENV", "production");
+    const cookiesSet = vi.fn();
+    const mockResponse = { cookies: { set: cookiesSet } } as unknown as import("next/server").NextResponse;
+    const forgedRequest = {
+      headers: { get: () => "http" },
+      nextUrl: { protocol: "http:" },
+    } as unknown as import("next/server").NextRequest;
+
+    setSessionCookie(mockResponse, "token", new Date(), forgedRequest);
+
+    expect(cookiesSet).toHaveBeenCalledWith("xg_session", "token", expect.objectContaining({ secure: true }));
+    vi.unstubAllEnvs();
+  });
+});
+
+describe("scheduleExpiredSessionCleanup", () => {
+  it("runs at most once per throttle interval and never throws", async () => {
+    const { scheduleExpiredSessionCleanup } = await import("@/lib/auth");
+    const deleteCallsBefore = mockDb.delete.mock.calls.length;
+
+    scheduleExpiredSessionCleanup();
+    scheduleExpiredSessionCleanup();
+
+    expect(mockDb.delete.mock.calls.length).toBe(deleteCallsBefore + 1);
   });
 });

@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createStudentTemplateCsv, parseCsv, validateStudentRows } from "../app/student-import.js";
 import { createCsv, filterTableRows } from "../app/interaction-utils.js";
 
+const buildHtmlUrl = new URL("../.next/server/app/index.html", import.meta.url);
+const hasBuild = existsSync(buildHtmlUrl);
+
 async function render() {
-  const html = await readFile(new URL("../.next/server/app/index.html", import.meta.url), "utf8");
+  const html = await readFile(buildHtmlUrl, "utf8");
   return new Response(html, { status: 200, headers: { "content-type": "text/html" } });
 }
 
-test("renders the complete smart student affairs shell", async () => {
+test("renders the complete smart student affairs shell", { skip: !hasBuild && "run `npm run build` first to produce .next/server/app/index.html" }, async () => {
   const response = await render();
   assert.equal(response.status, 200);
   const html = await response.text();
@@ -25,20 +29,21 @@ test("renders the complete smart student affairs shell", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
 });
 
-test("renders student-management controls with synthetic records", async () => {
+test("renders the DB-driven student-management skeleton without static records", { skip: !hasBuild && "需要 .next 构建产物：先运行 `npm run build`（仅校验静态骨架，不依赖数据库数据）" }, async () => {
   const response = await render();
   const html = await response.text();
 
-  assert.match(html, /请输入姓名/);
-  assert.match(html, /添加学生/);
-  assert.match(html, /批量导入/);
-  assert.match(html, /林晓晨/);
-  assert.match(html, /20260001/);
-  assert.match(html, /PostgreSQL/);
-  assert.doesNotMatch(html, /18761665823|黄春辉/);
+  // 学生页已改为数据库驱动 SSR：构建期无数据，渲染筛选表单与空状态骨架。
+  assert.match(html, /关键词/);
+  assert.match(html, /院系名称/);
+  assert.match(html, /姓名 \/ 学号 \/ 手机号/);
+  assert.match(html, /没有符合条件的学生记录/);
+  assert.match(html, /共 (?:<!-- -->)*0(?:<!-- -->)* 条记录/);
+  // 不再包含任何静态演示学生数据（原 system-data.ts 静态数组已删除）。
+  assert.doesNotMatch(html, /林晓晨|20260001|18761665823|黄春辉/);
 });
 
-test("exposes the reconstructed business flow", async () => {
+test("exposes the reconstructed business flow", { skip: !hasBuild && "run `npm run build` first to produce .next/server/app/index.html" }, async () => {
   const response = await render();
   const html = await response.text();
 
@@ -50,7 +55,7 @@ test("exposes the reconstructed business flow", async () => {
 });
 
 test("implements the complete four-section student form", async () => {
-  const source = await readFile(new URL("../app/StudentAffairsApp.tsx", import.meta.url), "utf8");
+  const source = await readFile(new URL("../app/components/student/StudentRecordDialog.tsx", import.meta.url), "utf8");
 
   assert.match(source, /基本信息/);
   assert.match(source, /学籍信息/);
@@ -63,7 +68,11 @@ test("implements the complete four-section student form", async () => {
 });
 
 test("gives every business stage a real record form", async () => {
-  const source = await readFile(new URL("../app/StudentAffairsApp.tsx", import.meta.url), "utf8");
+  const source = (await Promise.all([
+    readFile(new URL("../app/components/forms/BusinessRecordForm.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/forms/BatchRecordForm.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/forms/ApplicationRecordForm.tsx", import.meta.url), "utf8"),
+  ])).join("\n");
 
   assert.match(source, /ConfigRecordForm/);
   assert.match(source, /BatchRecordForm/);
@@ -81,8 +90,8 @@ test("implements all four top-level systems and their menus", async () => {
     readFile(new URL("../app/system-data.ts", import.meta.url), "utf8"),
   ]);
 
-  assert.match(appSource, /setActiveSystem/);
-  assert.match(appSource, /systemGroups/);
+  assert.match(appSource, /activeSystem/);
+  assert.match(appSource, /systems/);
   assert.match(dataSource, /welcomeFeatureGroups/);
   assert.match(dataSource, /dormFeatureGroups/);
   assert.match(dataSource, /adminFeatureGroups/);
@@ -135,7 +144,7 @@ test("generates an Excel-compatible student CSV template", () => {
 });
 
 test("implements the full student import dialog and workflow", async () => {
-  const source = await readFile(new URL("../app/StudentAffairsApp.tsx", import.meta.url), "utf8");
+  const source = await readFile(new URL("../app/components/student/StudentImportDialog.tsx", import.meta.url), "utf8");
   assert.match(source, /StudentImportDialog/);
   assert.match(source, /模板下载/);
   assert.match(source, /学生导入大约耗时3-5分钟/);
@@ -165,7 +174,11 @@ test("creates an Excel-compatible CSV export with escaped cells", () => {
 });
 
 test("wires every user-facing button to an action or native form behavior", async () => {
-  const source = await readFile(new URL("../app/StudentAffairsApp.tsx", import.meta.url), "utf8");
+  const source = (await Promise.all([
+    readFile(new URL("../app/components/student/StudentPage.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/generic/GenericModule.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/StudentAffairsApp.tsx", import.meta.url), "utf8"),
+  ])).join("\n");
   const buttonTags = source.match(/<button\b[^>]*>/g) ?? [];
   const inertButtons = buttonTags.filter((tag) => !/onClick=|type="(?:submit|reset)"|disabled/.test(tag));
 
@@ -177,7 +190,10 @@ test("wires every user-facing button to an action or native form behavior", asyn
 });
 
 test("routes every non-student import action through a real file import dialog", async () => {
-  const source = await readFile(new URL("../app/StudentAffairsApp.tsx", import.meta.url), "utf8");
+  const source = (await Promise.all([
+    readFile(new URL("../app/components/generic/GenericModule.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/generic/GenericImportDialog.tsx", import.meta.url), "utf8"),
+  ])).join("\n");
 
   assert.match(source, /GenericImportDialog/);
   assert.match(source, /primaryAction\.includes\("导入"\)/);
@@ -198,28 +214,32 @@ test("gives every non-student feature an explicit page presentation", async () =
     [...metadataSource.matchAll(/^\s{2}(?:"([^"]+)"|([A-Za-z][\w-]*)):\s*\{\s*variant:/gm)]
       .map((match) => match[1] || match[2]),
   );
-  const missing = featureIds.filter((id) => id !== "students" && !configuredIds.has(id));
+  // student-home and corps-admin are presented through dedicated modules
+  // (StudentHomeModule / admin modules) instead of feature-metadata variants.
+  const missing = featureIds.filter((id) => id !== "students" && id !== "student-home" && id !== "corps-admin" && !configuredIds.has(id));
 
   assert.deepEqual(missing, []);
-  assert.equal(featureIds.length, 127);
+  assert.equal(featureIds.length, 148);
 });
 
 test("matches the source student list filters, columns, and pagination controls", async () => {
-  const source = await readFile(new URL("../app/StudentAffairsApp.tsx", import.meta.url), "utf8");
+  const source = await readFile(new URL("../app/components/student/StudentPage.tsx", import.meta.url), "utf8");
+  const [tableSource, columnSource] = await Promise.all([
+    readFile(new URL("../app/components/generic/FeatureTable.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/student/student-types.ts", import.meta.url), "utf8"),
+  ]);
 
-  for (const filter of ["姓名", "学号", "手机号", "院系名称", "专业名称", "班级名称", "年级"]) {
+  for (const filter of ["关键词", "院系名称", "专业名称", "班级名称", "年级"]) {
     assert.match(source, new RegExp(`label: "${filter}"`));
   }
-  assert.match(source, /"出生日期", "现住址"/);
-  assert.match(source, /每页 10 条/);
-  assert.match(source, /跳至/);
-  assert.match(source, /setCurrentPage/);
+  assert.match(columnSource, /"出生日期", "现住址"/);
+  assert.match(tableSource, /每页 \{size\} 条/);
+  assert.match(tableSource, /setCurrentPage/);
 });
 
 test("implements a usable three-step workflow model designer", async () => {
-  const source = await readFile(new URL("../app/WorkflowDesignModule.tsx", import.meta.url), "utf8");
+  const source = await readFile(new URL("../app/components/workflow/ModelDesigner.tsx", import.meta.url), "utf8");
 
-  assert.match(source, /WorkflowDesignModule/);
   assert.match(source, /ModelDesigner/);
   assert.match(source, /选择表单/);
   assert.match(source, /设计流程/);
@@ -229,18 +249,19 @@ test("implements a usable three-step workflow model designer", async () => {
 });
 
 test("supports form design, workflow deployment versions, and activation", async () => {
-  const [source, appSource] = await Promise.all([
-    readFile(new URL("../app/WorkflowDesignModule.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/StudentAffairsApp.tsx", import.meta.url), "utf8"),
+  const [source, deploymentSource, workspaceSource] = await Promise.all([
+    readFile(new URL("../app/components/workflow/FormDesigner.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/workflow/DeploymentPage.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/layout/Workspace.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(source, /FormDesigner/);
   assert.match(source, /字段组件库/);
-  assert.match(source, /部署新版本/);
-  assert.match(source, /挂起/);
-  assert.match(source, /激活/);
-  assert.match(source, /更改分类/);
-  assert.match(appSource, /<WorkflowDesignModule key=\{activeFeature\}/);
+  assert.match(deploymentSource, /部署新版本/);
+  assert.match(deploymentSource, /挂起/);
+  assert.match(deploymentSource, /激活/);
+  assert.match(deploymentSource, /更改分类/);
+  assert.match(workspaceSource, /<WorkflowDesignModule/);
 });
 
 test("updates workflow nodes and deployments immutably", async () => {

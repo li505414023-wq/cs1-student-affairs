@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useState } from "react";
+import { api, isNetworkError } from "@/lib/api-client";
 
 type LogRow = {
   id: string;
@@ -36,13 +37,11 @@ export function SystemLogModule({ feature }: { feature: string }) {
       if (level) params.set("level", level);
       if (from) params.set("from", from);
       if (to) params.set("to", to);
-      const response = await fetch(`/api/admin/system-logs?${params.toString()}`, { credentials: "same-origin" });
-      if (!response.ok) { setNotice("日志加载失败,请重试"); return; }
-      const payload = await response.json() as { data: { items: LogRow[]; pagination: { total: number } } };
-      setRows(payload.data.items);
-      setTotal(payload.data.pagination.total);
-    } catch {
-      setNotice("网络连接异常,请检查后重试");
+      const data = await api.get<{ items: LogRow[]; pagination: { total: number } }>(`/api/admin/system-logs?${params.toString()}`);
+      setRows(data.items);
+      setTotal(data.pagination.total);
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络连接异常,请检查后重试" : "日志加载失败,请重试");
     } finally {
       setIsLoading(false);
     }

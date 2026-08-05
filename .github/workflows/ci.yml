@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Node 22 matches package.json "engines" (>=22.13) and is required by the
+      # node:test track, which imports TypeScript sources via Node's built-in
+      # type stripping (default since 22.18).
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      # Runs both tracks: vitest (unit + component tests) and node:test
+      # (tests/*.test.mjs). Integration tests that need a running server or
+      # credentials (BOOTSTRAP_ADMIN_*) skip themselves automatically, and the
+      # rendered-html tests skip when no .next build artifact is present.
+      - name: Test
+        run: npm test

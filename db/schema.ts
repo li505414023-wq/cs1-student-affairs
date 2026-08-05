@@ -85,7 +85,7 @@ export const sessions = pgTable("sessions", {
   expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-}, (table) => [uniqueIndex("sessions_token_uidx").on(table.tokenHash), index("sessions_user_idx").on(table.userId)]);
+}, (table) => [uniqueIndex("sessions_token_uidx").on(table.tokenHash), index("sessions_user_idx").on(table.userId), index("sessions_expires_at_idx").on(table.expiresAt)]);
 
 export const students = pgTable("students", {
   id: text("id").primaryKey(),

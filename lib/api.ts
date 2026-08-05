@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { auditLogs, systemLogs } from "@/db/schema";
+import type { ApiEnvelopeError, ApiEnvelopeSuccess } from "@/lib/api-types";
 
 export class ApiError extends Error {
   status: number;
@@ -14,11 +15,11 @@ export class ApiError extends Error {
   }
 }
 
-export function ok(data: unknown, status = 200) {
+export function ok<T>(data: T, status = 200): NextResponse<ApiEnvelopeSuccess<T>> {
   return NextResponse.json({ success: true, data }, { status });
 }
 
-export function fail(error: unknown, request?: Request) {
+export function fail(error: unknown, request?: Request): NextResponse<ApiEnvelopeError> {
   if (error instanceof ApiError) {
     // 5xx ApiErrors are system-level problems worth logging (4xx are client errors — skip).
     if (error.status >= 500) writeSystemLog({ message: error.message, request });

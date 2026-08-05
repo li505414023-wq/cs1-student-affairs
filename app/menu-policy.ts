@@ -1,4 +1,5 @@
 import type { SystemId } from "./system-data";
+import { STUDENT_APPLY_FEATURES, STUDENT_READ_ONLY_FEATURES } from "../lib/feature-policy";
 
 /**
  * Role-based navigation policy: which systems, sidebar groups, and features
@@ -35,19 +36,16 @@ export function isAdminGroupVisible(groupId: string, role: string): boolean {
   return allowed ? allowed.has(groupId) : false;
 }
 
-/** Features a student may see inside the student affairs system. */
-const STUDENT_VISIBLE_FEATURES: ReadonlySet<string> = new Set([
-  "student-home",
-  "students",
-  "leave",
-  "student-card",
-  "complaints",
-  "hardship",
-  "grants",
-  "scholarship",
-  "club-apply",
-  "return-school",
-  "appeal",
+/**
+ * Features a student may see inside the student affairs system.
+ * Derived from lib/feature-policy (the single source of truth shared with the
+ * records API): writable apply features + read-only browse features. Never
+ * hardcode a second list here — a visible menu whose backend rejects writes
+ * reproduces the "menu shows but submit 403s" bug.
+ */
+export const STUDENT_VISIBLE_FEATURES: ReadonlySet<string> = new Set([
+  ...STUDENT_APPLY_FEATURES,
+  ...STUDENT_READ_ONLY_FEATURES,
 ]);
 
 export function isFeatureVisible(featureId: string, role: string): boolean {

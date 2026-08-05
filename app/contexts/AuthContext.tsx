@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { api, setCsrfToken } from "@/lib/api-client";
 import type { AuthSession } from "../components/student/student-types";
 
 type AuthState = AuthSession | "loading" | null;
@@ -34,21 +35,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    void fetch("/api/auth/session", { credentials: "same-origin" })
-      .then(async (response) => {
+    api.get<AuthSession>("/api/auth/session")
+      .then((session) => {
         if (!active) return;
-        if (!response.ok) { setAuth(null); return; }
-        const payload = await response.json() as { data: AuthSession };
-        setAuth(payload.data);
+        setCsrfToken(session.csrfToken);
+        setAuth(session);
       })
-      .catch(() => { if (active) setAuth(null); });
+      .catch(() => {
+        if (!active) return;
+        setCsrfToken("");
+        setAuth(null);
+      });
     return () => { active = false; };
   }, []);
 
+  // Keep the api-client CSRF token in sync with the current session
+  // (covers both initial load and login/logout transitions).
+  useEffect(() => {
+    if (auth && auth !== "loading") setCsrfToken(auth.csrfToken);
+  }, [auth]);
+
   const logout = useCallback(async () => {
     if (auth && auth !== "loading") {
-      await fetch("/api/auth/session", { method: "DELETE", headers: { "x-csrf-token": auth.csrfToken } });
+      await api.del("/api/auth/session").catch(() => {});
     }
+    setCsrfToken("");
     setAuth(null);
   }, [auth]);
 

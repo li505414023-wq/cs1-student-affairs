@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { API_ROUTE_INVENTORY } from "@/lib/api-routes";
+import { api, isNetworkError } from "@/lib/api-client";
 
 type RoleRow = { id: string; code: string; name: string; permissions: string[]; status: string };
 
@@ -25,13 +26,11 @@ export function ApiPermissionModule() {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/admin/roles", { credentials: "same-origin" })
-      .then(async (response) => {
-        if (!response.ok || !active) { if (active) setNotice("角色列表加载失败"); return; }
-        const payload = await response.json() as { data: { items: RoleRow[] } };
-        setRoleRows(payload.data.items.filter((role) => role.status === "启用"));
+    api.get<{ items: RoleRow[] }>("/api/admin/roles")
+      .then((data) => {
+        if (active) setRoleRows(data.items.filter((role) => role.status === "启用"));
       })
-      .catch(() => { if (active) setNotice("网络连接异常"); })
+      .catch((error) => { if (active) setNotice(isNetworkError(error) ? "网络连接异常" : "角色列表加载失败"); })
       .finally(() => { if (active) setIsLoading(false); });
     return () => { active = false; };
   }, []);

@@ -7,8 +7,8 @@ const systemDataSource = await readFile(new URL("../app/system-data.ts", import.
 const featureIds = extractFeatureIds(systemDataSource);
 
 test("extracts every feature entry from all four systems", () => {
-  assert.equal(featureIds.length, 127);
-  assert.equal(new Set(featureIds).size, 127);
+  assert.equal(featureIds.length, 146);
+  assert.equal(new Set(featureIds).size, 146);
   for (const expected of ["students", "leave", "card-checkin", "dorm-repair", "deployment", "error-log"]) {
     assert.ok(featureIds.includes(expected));
   }
@@ -21,9 +21,9 @@ test("generates deterministic full-coverage datasets", () => {
 
   assert.deepEqual(first, second);
   assert.equal(first.students.length, 40);
-  assert.equal(first.businessRecords.length, 127 * 3);
+  assert.equal(first.businessRecords.length, featureIds.length * 3);
   assert.equal(new Set(first.students.map((student) => student.no)).size, 40);
-  assert.equal(new Set(first.businessRecords.map((record) => record.featureId)).size, 127);
+  assert.equal(new Set(first.businessRecords.map((record) => record.featureId)).size, featureIds.length);
   assert.ok(first.users.some((user) => user.role === "staff"));
   assert.ok(first.users.some((user) => user.role === "viewer"));
   assert.ok(first.workflowForms.length >= 8);

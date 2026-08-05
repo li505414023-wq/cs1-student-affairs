@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { systems, workflow } from "./system-data";
+import { api, apiErrorMessage, isNetworkError } from "@/lib/api-client";
 import { ChangePasswordDialog } from "./components/ChangePasswordDialog";
 import { initialWorkflowDeployments, initialWorkflowForms, initialWorkflowModels, type WorkflowDeployment, type WorkflowForm, type WorkflowModel } from "./WorkflowDesignModule";
 import { LoginPanel } from "./components/LoginPanel";
@@ -58,19 +59,19 @@ function AppShell() {
   const workflowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshStudents = useCallback(async (query: StudentQuery = emptyStudentQuery) => {
+    const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) });
+    if (query.keyword.trim()) params.set("keyword", query.keyword.trim());
+    if (query.faculty.trim()) params.set("faculty", query.faculty.trim());
+    if (query.major.trim()) params.set("major", query.major.trim());
+    if (query.className.trim()) params.set("className", query.className.trim());
+    if (query.grade.trim()) params.set("grade", query.grade.trim());
     try {
-      const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) });
-      if (query.keyword.trim()) params.set("keyword", query.keyword.trim());
-      if (query.faculty.trim()) params.set("faculty", query.faculty.trim());
-      if (query.major.trim()) params.set("major", query.major.trim());
-      if (query.className.trim()) params.set("className", query.className.trim());
-      if (query.grade.trim()) params.set("grade", query.grade.trim());
-      const response = await fetch(`/api/students?${params.toString()}`, { credentials: "same-origin" });
-      if (!response.ok) { setAuthNotice("学生数据加载失败，请检查网络连接后刷新"); return; }
-      const payload = await response.json() as { data: { items: StudentRecord[]; pagination: { total: number } } };
-      setStudentRows(payload.data.items);
-      setStudentTotal(payload.data.pagination.total);
-    } catch { setAuthNotice("网络异常，无法加载学生数据"); }
+      const data = await api.get<{ items: StudentRecord[]; pagination: { total: number } }>(`/api/students?${params.toString()}`);
+      setStudentRows(data.items);
+      setStudentTotal(data.pagination.total);
+    } catch (error) {
+      setAuthNotice(isNetworkError(error) ? "网络异常，无法加载学生数据" : "学生数据加载失败，请检查网络连接后刷新");
+    }
   }, [setAuthNotice]);
 
   // Reset navigation for student role + initial data load
@@ -92,19 +93,20 @@ function AppShell() {
     if (!auth || auth === "loading" || workflowReady.current) return;
     if (auth.user.role !== "admin") return;
     let active = true;
-    void fetch("/api/workflows", { credentials: "same-origin" }).then(async (response) => {
-      if (!response.ok || !active) return;
-      const payload = await response.json() as { data: { forms: WorkflowForm[]; models: WorkflowModel[]; deployments: WorkflowDeployment[] } };
-      const hasSavedDesign = payload.data.forms.length > 0 || payload.data.models.length > 0 || payload.data.deployments.length > 0;
-      workflowReady.current = true;
-      if (hasSavedDesign) {
-        setWorkflowForms(payload.data.forms);
-        setWorkflowModels(payload.data.models);
-        setWorkflowDeployments(payload.data.deployments);
-      } else {
-        await fetch("/api/workflows", { method: "PUT", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf-token": auth.csrfToken }, body: JSON.stringify({ forms: initialWorkflowForms, models: initialWorkflowModels, deployments: initialWorkflowDeployments }) });
-      }
-    });
+    void api.get<{ forms: WorkflowForm[]; models: WorkflowModel[]; deployments: WorkflowDeployment[] }>("/api/workflows")
+      .then(async (data) => {
+        if (!active) return;
+        const hasSavedDesign = data.forms.length > 0 || data.models.length > 0 || data.deployments.length > 0;
+        workflowReady.current = true;
+        if (hasSavedDesign) {
+          setWorkflowForms(data.forms);
+          setWorkflowModels(data.models);
+          setWorkflowDeployments(data.deployments);
+        } else {
+          await api.put("/api/workflows", { forms: initialWorkflowForms, models: initialWorkflowModels, deployments: initialWorkflowDeployments }).catch(() => {});
+        }
+      })
+      .catch(() => {});
     return () => { active = false; };
   }, [auth]);
 
@@ -112,7 +114,7 @@ function AppShell() {
     if (!auth || auth === "loading" || !workflowReady.current || auth.user.role !== "admin") return;
     if (workflowTimer.current) clearTimeout(workflowTimer.current);
     workflowTimer.current = setTimeout(() => {
-      void fetch("/api/workflows", { method: "PUT", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf-token": auth.csrfToken }, body: JSON.stringify({ forms: workflowForms, models: workflowModels, deployments: workflowDeployments }) });
+      void api.put("/api/workflows", { forms: workflowForms, models: workflowModels, deployments: workflowDeployments }).catch(() => {});
     }, 350);
     return () => { if (workflowTimer.current) clearTimeout(workflowTimer.current); };
   }, [auth, workflowDeployments, workflowForms, workflowModels]);
@@ -120,14 +122,17 @@ function AppShell() {
   const saveStudent = async (record: StudentRecord) => {
     if (!auth || auth === "loading") return;
     const existingId = studentEditor?.student?.id;
-    const response = await fetch(existingId ? `/api/students/${existingId}` : "/api/students", {
-      method: existingId ? "PUT" : "POST",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json", "x-csrf-token": auth.csrfToken },
-      body: JSON.stringify({ ...record, status: record.status ?? "在读" }),
-    });
-    const payload = await response.json() as { data: StudentRecord; error?: string };
-    if (!response.ok) { setAuthNotice(payload.error ?? "学生信息保存失败"); return; }
+    const body = { ...record, status: record.status ?? "在读" };
+    try {
+      if (existingId) {
+        await api.put(`/api/students/${existingId}`, body);
+      } else {
+        await api.post("/api/students", body);
+      }
+    } catch (error) {
+      setAuthNotice(apiErrorMessage(error, "学生信息保存失败"));
+      return;
+    }
     setStudentEditor(null);
     setAuthNotice("学生信息已保存");
     void refreshStudents(studentQuery);
@@ -135,15 +140,13 @@ function AppShell() {
 
   const importStudents = async (rows: StudentRecord[]) => {
     if (!auth || auth === "loading") return;
-    const response = await fetch("/api/students/batch", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json", "x-csrf-token": auth.csrfToken },
-      body: JSON.stringify({ students: rows.map((r) => ({ ...r, status: "在读" })) }),
-    });
-    const payload = await response.json() as { data: { saved: StudentRecord[]; errors: Array<{ index: number; message: string }>; total: number; savedCount: number } };
-    if (!response.ok) { setAuthNotice(payload.data?.errors?.[0]?.message ?? "批量导入失败"); return; }
-    const result = payload.data;
+    let result: { saved: StudentRecord[]; errors: Array<{ index: number; message: string }>; total: number; savedCount: number };
+    try {
+      result = await api.post("/api/students/batch", { students: rows.map((r) => ({ ...r, status: "在读" })) });
+    } catch {
+      setAuthNotice("批量导入失败");
+      return;
+    }
     void refreshStudents({ ...studentQuery, page: 1 });
     if (result.errors.length > 0) {
       setAuthNotice(`成功导入 ${result.savedCount} / ${result.total} 条，${result.errors.length} 条失败: ${result.errors.slice(0, 3).map((e) => e.message).join("; ")}${result.errors.length > 3 ? "…" : ""}`);

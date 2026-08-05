@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CountUp } from "../shared/use-count-up";
+import { api, apiErrorMessage, isNetworkError } from "@/lib/api-client";
 
 type OpsStats = { running: number; overdue: number; awaitingClaim: number; pending: number; total: number };
 type OpsInstance = {
@@ -21,6 +22,7 @@ function minutesSince(iso: string): number {
 
 /** Workflow operations dashboard: stats, running instances, overdue alerts, admin cancel. */
 export function OpsScheduleModule({ csrfToken }: { csrfToken: string }) {
+  void csrfToken; // CSRF 由 api-client 统一携带
   const [stats, setStats] = useState<OpsStats | null>(null);
   const [instances, setInstances] = useState<OpsInstance[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,13 +32,11 @@ export function OpsScheduleModule({ csrfToken }: { csrfToken: string }) {
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/admin/ops-schedule", { credentials: "same-origin" });
-      if (!response.ok) { setNotice("运维数据加载失败,请重试"); return; }
-      const payload = await response.json() as { data: { stats: OpsStats; items: OpsInstance[] } };
-      setStats(payload.data.stats);
-      setInstances(payload.data.items);
-    } catch {
-      setNotice("网络连接异常,请检查后重试");
+      const data = await api.get<{ stats: OpsStats; items: OpsInstance[] }>("/api/admin/ops-schedule");
+      setStats(data.stats);
+      setInstances(data.items);
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络连接异常,请检查后重试" : "运维数据加载失败,请重试");
     } finally {
       setIsLoading(false);
     }
@@ -48,16 +48,11 @@ export function OpsScheduleModule({ csrfToken }: { csrfToken: string }) {
     if (!window.confirm(`确认管理员强制撤回「${instance.title ?? "流程实例"}」吗?`)) return;
     setBusyId(instance.id);
     try {
-      const response = await fetch(`/api/workflow/instances/${instance.id}`, {
-        method: "DELETE", credentials: "same-origin",
-        headers: { "x-csrf-token": csrfToken },
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "撤回失败,请重试"); return; }
+      await api.del(`/api/workflow/instances/${instance.id}`);
       setNotice(`已撤回:${instance.title ?? "流程实例"}`);
       void load();
-    } catch {
-      setNotice("网络异常,撤回未完成");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常,撤回未完成" : apiErrorMessage(error, "撤回失败,请重试"));
     } finally {
       setBusyId(null);
     }

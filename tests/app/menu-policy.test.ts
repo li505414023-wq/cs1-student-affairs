@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { canManageStudents, isAdminGroupVisible, isFeatureVisible, isShellFeature, systemsForRole } from "@/app/menu-policy";
+import { canManageStudents, isAdminGroupVisible, isFeatureVisible, isShellFeature, systemsForRole, STUDENT_VISIBLE_FEATURES } from "@/app/menu-policy";
+import { STUDENT_APPLY_FEATURES, STUDENT_READ_ONLY_FEATURES } from "@/lib/feature-policy";
 
 describe("menu policy", () => {
   it("restricts visible systems by role", () => {
@@ -23,9 +24,33 @@ describe("menu policy", () => {
     expect(isFeatureVisible("student-home", "student")).toBe(true);
     expect(isFeatureVisible("leave", "student")).toBe(true);
     expect(isFeatureVisible("student-card", "student")).toBe(true);
+    expect(isFeatureVisible("appeal", "student")).toBe(true);
     expect(isFeatureVisible("scholarship-batch", "student")).toBe(false);
     expect(isFeatureVisible("user-admin", "student")).toBe(false);
     expect(isFeatureVisible("scholarship-batch", "counselor")).toBe(true);
+  });
+
+  it("hides review-stage admin features from students (no 403-on-submit menus)", () => {
+    // 投诉/困难补助/奖学金评定/返校(及助学金)是管理端 review 类功能，
+    // 后端 STUDENT_APPLY_FEATURES 不允许学生提交，前端菜单必须同步收敛。
+    for (const featureId of ["complaints", "hardship", "scholarship", "return-school", "grants"]) {
+      expect(isFeatureVisible(featureId, "student"), featureId).toBe(false);
+      expect(STUDENT_VISIBLE_FEATURES.has(featureId), featureId).toBe(false);
+    }
+  });
+
+  it("cross-check: writable subset of visible features stays within the backend apply whitelist", () => {
+    // 防漂移不变量：学生可见名单 = 可写申请名单 ∪ 只读名单，
+    // 任何可见且可写（非只读）的 feature 必须在后端白名单内。
+    for (const featureId of STUDENT_VISIBLE_FEATURES) {
+      if (!STUDENT_READ_ONLY_FEATURES.has(featureId)) {
+        expect(STUDENT_APPLY_FEATURES.has(featureId), featureId).toBe(true);
+      }
+    }
+    // 反向：后端允许申请的 feature 一定对学生可见。
+    for (const featureId of STUDENT_APPLY_FEATURES) {
+      expect(STUDENT_VISIBLE_FEATURES.has(featureId), featureId).toBe(true);
+    }
   });
 
   it("hides student management actions from read-only roles", () => {

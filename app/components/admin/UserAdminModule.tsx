@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { BUILTIN_ROLES } from "@/lib/role-defs";
+import { api, apiErrorMessage, isNetworkError } from "@/lib/api-client";
 
 type UserRow = {
   id: string;
@@ -59,13 +60,11 @@ export function UserAdminModule({ csrfToken }: { csrfToken: string }) {
       if (keyword.trim()) params.set("keyword", keyword.trim());
       if (roleFilter) params.set("role", roleFilter);
       if (activeFilter) params.set("active", activeFilter);
-      const response = await fetch(`/api/admin/users?${params.toString()}`, { credentials: "same-origin" });
-      if (!response.ok) { setNotice("用户列表加载失败,请重试"); return; }
-      const payload = await response.json() as { data: { items: UserRow[]; pagination: { total: number } } };
-      setUsers(payload.data.items);
-      setTotal(payload.data.pagination.total);
-    } catch {
-      setNotice("网络连接异常,请检查后重试");
+      const data = await api.get<{ items: UserRow[]; pagination: { total: number } }>(`/api/admin/users?${params.toString()}`);
+      setUsers(data.items);
+      setTotal(data.pagination.total);
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络连接异常,请检查后重试" : "用户列表加载失败,请重试");
     } finally {
       setIsLoading(false);
     }
@@ -77,10 +76,9 @@ export function UserAdminModule({ csrfToken }: { csrfToken: string }) {
     let active = true;
     const loadOptions = async (featureId: string, setter: (options: NamedOption[]) => void) => {
       try {
-        const response = await fetch(`/api/admin/entities/${featureId}?pageSize=200&status=启用`, { credentials: "same-origin" });
-        if (!response.ok || !active) return;
-        const payload = await response.json() as { data: { items: Array<{ id: string; name: string }> } };
-        setter(payload.data.items.map((item) => ({ id: item.id, name: item.name })));
+        if (!active) return;
+        const data = await api.get<{ items: Array<{ id: string; name: string }> }>(`/api/admin/entities/${featureId}?pageSize=200&status=启用`);
+        if (active) setter(data.items.map((item) => ({ id: item.id, name: item.name })));
       } catch { /* optional enhancement */ }
     };
     void loadOptions("org-admin", (options) => setOrgs(options));
@@ -91,11 +89,10 @@ export function UserAdminModule({ csrfToken }: { csrfToken: string }) {
   // Role options come from the dynamic roles table (falls back to builtins).
   useEffect(() => {
     let active = true;
-    fetch("/api/admin/roles", { credentials: "same-origin" })
-      .then(async (response) => {
-        if (!response.ok || !active) return;
-        const payload = await response.json() as { data: { items: Array<{ code: string; name: string; description: string; status: string }> } };
-        const items = payload.data.items.filter((i) => i.status === "启用").map((i) => ({ code: i.code, label: i.name, description: i.description }));
+    api.get<{ items: Array<{ code: string; name: string; description: string; status: string }> }>("/api/admin/roles")
+      .then((data) => {
+        if (!active) return;
+        const items = data.items.filter((i) => i.status === "启用").map((i) => ({ code: i.code, label: i.name, description: i.description }));
         if (items.length > 0) setRolesList(items);
       })
       .catch(() => {});
@@ -108,17 +105,11 @@ export function UserAdminModule({ csrfToken }: { csrfToken: string }) {
     if (confirmText && !window.confirm(confirmText)) return;
     setBusyId(user.id);
     try {
-      const response = await fetch(`/api/admin/users/${user.id}`, {
-        method: "PUT", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify(body),
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "操作失败,请重试"); return; }
+      await api.put(`/api/admin/users/${user.id}`, body);
       setNotice(action);
       void load(page);
-    } catch {
-      setNotice("网络异常,操作未完成");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常,操作未完成" : apiErrorMessage(error, "操作失败,请重试"));
     } finally {
       setBusyId(null);
     }
@@ -128,16 +119,11 @@ export function UserAdminModule({ csrfToken }: { csrfToken: string }) {
     if (!window.confirm(`确认强制 ${user.displayName} 下线吗?`)) return;
     setBusyId(user.id);
     try {
-      const response = await fetch(`/api/admin/users/${user.id}/sessions`, {
-        method: "DELETE", credentials: "same-origin",
-        headers: { "x-csrf-token": csrfToken },
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "操作失败,请重试"); return; }
+      await api.del(`/api/admin/users/${user.id}/sessions`);
       setNotice(`已强制 ${user.displayName} 下线`);
       void load(page);
-    } catch {
-      setNotice("网络异常,操作未完成");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常,操作未完成" : apiErrorMessage(error, "操作失败,请重试"));
     } finally {
       setBusyId(null);
     }
@@ -238,6 +224,7 @@ function UserDialog({ mode, user, orgs, posts, roles, csrfToken, onClose, onSave
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
+  void csrfToken; // CSRF 由 api-client 统一携带
   const [form, setForm] = useState({
     username: user?.username ?? "",
     displayName: user?.displayName ?? "",
@@ -261,29 +248,26 @@ function UserDialog({ mode, user, orgs, posts, roles, csrfToken, onClose, onSave
     try {
       if (mode === "password") {
         if (form.password.length < 10) { setNotice("密码至少需要 10 个字符"); return; }
-        const response = await fetch(`/api/admin/users/${user?.id}`, {
-          method: "PUT", credentials: "same-origin",
-          headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-          body: JSON.stringify({ password: form.password }),
-        });
-        const payload = await response.json().catch(() => null) as { error?: string } | null;
-        if (!response.ok) { setNotice(payload?.error ?? "重置失败,请重试"); return; }
+        try {
+          await api.put(`/api/admin/users/${user?.id}`, { password: form.password });
+        } catch (error) {
+          setNotice(isNetworkError(error) ? "网络异常,保存未完成" : apiErrorMessage(error, "重置失败,请重试"));
+          return;
+        }
         onSaved(`密码已重置,该用户的其他会话已下线`);
         return;
       }
       const body = mode === "create"
         ? { username: form.username, password: form.password, displayName: form.displayName, role: form.role, phone: form.phone, email: form.email, orgId: form.orgId, postId: form.postId }
         : { displayName: form.displayName, role: form.role, phone: form.phone, email: form.email, orgId: form.orgId, postId: form.postId };
-      const response = await fetch(mode === "create" ? "/api/admin/users" : `/api/admin/users/${user?.id}`, {
-        method: mode === "create" ? "POST" : "PUT", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify(body),
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "保存失败,请重试"); return; }
+      if (mode === "create") {
+        await api.post("/api/admin/users", body);
+      } else {
+        await api.put(`/api/admin/users/${user?.id}`, body);
+      }
       onSaved(mode === "create" ? "用户已创建" : "用户信息已更新");
-    } catch {
-      setNotice("网络异常,保存未完成");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常,保存未完成" : apiErrorMessage(error, "保存失败,请重试"));
     } finally {
       setBusy(false);
     }

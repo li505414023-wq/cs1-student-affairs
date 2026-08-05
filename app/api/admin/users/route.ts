@@ -1,12 +1,14 @@
 import { and, count, desc, eq, ilike, or } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
+import { z } from "zod";
 import { getDb } from "@/db";
 import { users } from "@/db/schema";
 import { requirePermission, validateCsrf } from "@/lib/auth";
 import { hashPassword } from "@/lib/security";
 import { getRoleCodes } from "@/lib/role-catalog";
 import { ApiError, fail, isUniqueViolation, ok, readJson, requestIp, writeAudit } from "@/lib/api";
+import { parsePagination, queryText } from "@/lib/http-utils";
 
 export const runtime = "nodejs";
 
@@ -16,15 +18,31 @@ const optionalText = (value: unknown) => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+const stringField = (fallback: string) => (value: unknown) => (typeof value === "string" ? value : fallback);
+
+const createUserSchema = z.object({
+  username: z.preprocess(stringField(""), z.string().trim().min(2, "用户名至少2个字符").regex(/^[A-Za-z0-9_.-]+$/, "用户名只能包含字母、数字、下划线、点和横线")),
+  password: z.preprocess(stringField(""), z.string().min(10, "密码至少10个字符")),
+  displayName: z.preprocess((value) => (typeof value === "string" ? value.trim() : null), z.string().nullable()),
+  role: z.preprocess(stringField("staff"), z.string()),
+  roleTags: z.preprocess(
+    (value) => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []),
+    z.array(z.string()),
+  ),
+  phone: z.preprocess(optionalText, z.string().nullable()),
+  email: z.preprocess(optionalText, z.string().nullable()),
+  orgId: z.preprocess(optionalText, z.string().nullable()),
+  postId: z.preprocess(optionalText, z.string().nullable()),
+});
+
 export async function GET(request: NextRequest) {
   try {
     await requirePermission(request, "admin");
     const url = new URL(request.url);
-    const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
-    const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("pageSize")) || 20));
-    const keyword = url.searchParams.get("keyword")?.trim() ?? "";
-    const role = url.searchParams.get("role")?.trim() ?? "";
-    const activeParam = url.searchParams.get("active")?.trim() ?? "";
+    const { page, pageSize } = parsePagination(url);
+    const keyword = queryText(url, "keyword");
+    const role = queryText(url, "role");
+    const activeParam = queryText(url, "active");
 
     const keywordCondition = keyword
       ? or(ilike(users.username, `%${keyword}%`), ilike(users.displayName, `%${keyword}%`), ilike(users.phone, `%${keyword}%`))
@@ -53,19 +71,11 @@ export async function POST(request: NextRequest) {
     const session = await requirePermission(request, "admin");
     validateCsrf(request, session);
     const body = await readJson(request);
-    const username = typeof body?.username === "string" ? body.username.trim() : "";
-    const password = typeof body?.password === "string" ? body.password : "";
-    const displayName = typeof body?.displayName === "string" ? body.displayName.trim() : username;
-    const role = typeof body?.role === "string" ? body.role : "staff";
-    const roleTags = Array.isArray(body?.roleTags) ? body.roleTags.filter((t: unknown) => typeof t === "string") : [];
-    const phone = optionalText(body?.phone);
-    const email = optionalText(body?.email);
-    const orgId = optionalText(body?.orgId);
-    const postId = optionalText(body?.postId);
+    const parsed = createUserSchema.safeParse(body);
+    if (!parsed.success) throw new ApiError(422, parsed.error.issues[0]?.message ?? "格式不正确");
+    const { username, password, role, roleTags, phone, email, orgId, postId } = parsed.data;
+    const displayName = parsed.data.displayName ?? username;
 
-    if (!username || username.length < 2) throw new ApiError(422, "用户名至少2个字符");
-    if (!/^[A-Za-z0-9_.-]+$/.test(username)) throw new ApiError(422, "用户名只能包含字母、数字、下划线、点和横线");
-    if (!password || password.length < 10) throw new ApiError(422, "密码至少10个字符");
     if (!(await getRoleCodes()).includes(role)) throw new ApiError(422, "无效的角色");
 
     const id = randomUUID();

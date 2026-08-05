@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getEntityConfig } from "@/lib/entity-features";
+import { api, apiErrorMessage, isNetworkError } from "@/lib/api-client";
 import { EntityDialog, type EntityItem } from "./EntityDialog";
 
 type ItemRow = EntityItem & { id: string; parentName: string; createdAt: string };
@@ -45,13 +46,11 @@ export function EntityModule({ featureId, csrfToken }: { featureId: string; csrf
       if (keyword.trim()) params.set("keyword", keyword.trim());
       if (statusFilter) params.set("status", statusFilter);
       if (parentFilter) params.set("parentCode", parentFilter);
-      const response = await fetch(`/api/admin/entities/${featureId}?${params.toString()}`, { credentials: "same-origin" });
-      if (!response.ok) { setNotice("数据加载失败,请重试"); return; }
-      const payload = await response.json() as { data: { items: ItemRow[]; pagination: { total: number } } };
-      setItems(payload.data.items);
-      setTotal(payload.data.pagination.total);
-    } catch {
-      setNotice("网络连接异常,请检查后重试");
+      const data = await api.get<{ items: ItemRow[]; pagination: { total: number } }>(`/api/admin/entities/${featureId}?${params.toString()}`);
+      setItems(data.items);
+      setTotal(data.pagination.total);
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络连接异常,请检查后重试" : "数据加载失败,请重试");
     } finally {
       setIsLoading(false);
     }
@@ -63,12 +62,8 @@ export function EntityModule({ featureId, csrfToken }: { featureId: string; csrf
   useEffect(() => {
     if (!config?.hierarchical) return;
     let active = true;
-    fetch(`/api/admin/entities/${config.hierarchical.parentFeature}?pageSize=200`, { credentials: "same-origin" })
-      .then(async (response) => {
-        if (!response.ok || !active) return;
-        const payload = await response.json() as { data: { items: Array<{ code: string; name: string }> } };
-        setParentOptions(payload.data.items.filter((entry) => entry.code));
-      })
+    api.get<{ items: Array<{ code: string; name: string }> }>(`/api/admin/entities/${config.hierarchical.parentFeature}?pageSize=200`)
+      .then((data) => { if (active) setParentOptions(data.items.filter((entry) => entry.code)); })
       .catch(() => {});
     return () => { active = false; };
   }, [config]);
@@ -81,31 +76,24 @@ export function EntityModule({ featureId, csrfToken }: { featureId: string; csrf
   const toggleStatus = async (row: ItemRow) => {
     setBusyId(row.id);
     try {
-      const response = await fetch(`/api/admin/entities/${featureId}/${row.id}`, {
-        method: "PUT", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ name: row.name, code: row.code, description: row.description, parentCode: row.parentCode, sortOrder: row.sortOrder, status: row.status === "启用" ? "停用" : "启用", data: row.data }),
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "操作失败,请重试"); return; }
+      await api.put(`/api/admin/entities/${featureId}/${row.id}`, { name: row.name, code: row.code, description: row.description, parentCode: row.parentCode, sortOrder: row.sortOrder, status: row.status === "启用" ? "停用" : "启用", data: row.data });
       setNotice(`已${row.status === "启用" ? "停用" : "启用"}:${row.name}`);
       void load(page);
-    } catch { setNotice("网络异常,操作未完成"); } finally { setBusyId(null); }
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常,操作未完成" : apiErrorMessage(error, "操作失败,请重试"));
+    } finally { setBusyId(null); }
   };
 
   const remove = async (row: ItemRow) => {
     if (!window.confirm(`确认删除「${row.name}」吗?此操作不可恢复。`)) return;
     setBusyId(row.id);
     try {
-      const response = await fetch(`/api/admin/entities/${featureId}/${row.id}`, {
-        method: "DELETE", credentials: "same-origin",
-        headers: { "x-csrf-token": csrfToken },
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "删除失败,请重试"); return; }
+      await api.del(`/api/admin/entities/${featureId}/${row.id}`);
       setNotice(`已删除:${row.name}`);
       void load(page);
-    } catch { setNotice("网络异常,删除未完成"); } finally { setBusyId(null); }
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常,删除未完成" : apiErrorMessage(error, "删除失败,请重试"));
+    } finally { setBusyId(null); }
   };
 
   return (

@@ -31,6 +31,8 @@ npm run lint
 npm audit --omit=dev
 ```
 
+`npm test` 为双轨道：先跑 `vitest run`（tests/ 下的 .ts/.tsx 单元与组件测试，含 jsdom 渲染），再跑 `node:test`（tests/*.test.mjs，覆盖后端、导入、迁移守卫与渲染产物等）。
+
 使用生产构建在 4173 端口预览：
 
 ```bash
@@ -91,6 +93,13 @@ npm start -- -p 4173
 - 流程表单、流程模型和部署记录的数据结构与受保护接口。
 - 所有仓库展示数据均为虚构数据；生产数据库连接通过 `DATABASE_URL` 注入。
 
-## 上线边界
+## 部署现状
 
-当前只面向本机开发和验收。尚未执行服务器上传、域名切换、HTTPS、反向代理、自动备份或生产数据库迁移；这些工作应在本地功能验收完成后单独进行。
+系统已实际部署上线，采用 nginx 反向代理 + systemd 服务 + PostgreSQL 的组合：
+
+- `deploy/nginx.conf` / `deploy/nginx-http-bootstrap.conf`：HTTPS 终结与反向代理配置（含 certbot 自动续期定时任务 `deploy/certbot-renew.*`）。
+- `deploy/cs1.service`：systemd 服务单元，以 `npm start` 运行生产构建，密钥与数据库连接经 `EnvironmentFile=/etc/cs1.env` 注入，并带沙箱加固项。
+- `deploy/setup-postgres.sh` / `deploy/prepare-production-postgres.sh`：生产 PostgreSQL 初始化脚本。
+- `scripts/deploy.sh`：代码同步与上线脚本（同步时排除 `.env.local`，避免覆盖服务器配置）。
+
+本地开发仍以 `npm run dev` 为准；生产链路的域名、HTTPS 与备份均在服务器上由上述配置管理。

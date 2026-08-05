@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("hashes passwords with a unique salt and verifies them", async () => {
-  const { hashPassword, verifyPassword } = await import("../lib/security.js");
+  const { hashPassword, verifyPassword } = await import("../lib/security.ts");
   const first = await hashPassword("Correct-Horse-2026!");
   const second = await hashPassword("Correct-Horse-2026!");
 
@@ -14,17 +14,17 @@ test("hashes passwords with a unique salt and verifies them", async () => {
 });
 
 test("enforces role permissions", async () => {
-  const { hasPermission } = await import("../lib/security.js");
+  const { hasPermission } = await import("../lib/security.ts");
 
-  assert.equal(hasPermission("admin", "delete"), true);
-  assert.equal(hasPermission("staff", "write"), true);
-  assert.equal(hasPermission("staff", "admin"), false);
-  assert.equal(hasPermission("viewer", "write"), false);
-  assert.equal(hasPermission("viewer", "read"), true);
+  assert.equal(await hasPermission("admin", "delete"), true);
+  assert.equal(await hasPermission("staff", "write"), true);
+  assert.equal(await hasPermission("staff", "admin"), false);
+  assert.equal(await hasPermission("viewer", "write"), false);
+  assert.equal(await hasPermission("viewer", "read"), true);
 });
 
 test("validates and normalizes student payloads", async () => {
-  const { validateStudentInput } = await import("../lib/validation.js");
+  const { validateStudentInput } = await import("../lib/validation.ts");
   const valid = validateStudentInput({
     name: "  顾明澈 ", no: "20260088", phone: "13800001234", gender: "男",
     faculty: "信息工程学院", major: "软件技术", className: "软件2601",

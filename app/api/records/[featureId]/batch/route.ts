@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/db";
+import type { getDb as getDbType } from "@/db";
 import { businessRecords } from "@/db/schema";
 import { requirePermission, validateCsrf } from "@/lib/auth";
-import { ApiError, fail, ok, readJson, requestIp, writeAudit } from "@/lib/api";
+import { ApiError, fail, ok, readJson, requestIp, writeAudit, writeSystemLog } from "@/lib/api";
 import { validateRecordInput } from "@/lib/validation";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { afterRecordCreated, enrichRecordData, validateRecordAgainstDb, validateRecordBusiness } from "@/lib/records-hooks";
+
+type Db = ReturnType<typeof getDbType>;
 
 export const runtime = "nodejs";
 
@@ -16,8 +20,10 @@ function validFeatureId(value: string) {
 
 /**
  * Batch import of business records (CSV/XLSX upload in GenericModule).
- * All-or-nothing: validation failures are collected and skipped, any database
- * error rolls the whole batch back.
+ * Each row runs through the same hook pipeline as single-record creation
+ * (业务规则校验 → 数据库前置校验 → 数据补全 → 创建后联动); a row failing
+ * validation is collected into errors and skipped, any database error rolls
+ * the whole batch back.
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ featureId: string }> }) {
   try {
@@ -38,6 +44,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ fe
     const db = getDb();
     try {
       await db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
           const data = row && typeof row === "object" && !Array.isArray(row) ? (row as Record<string, unknown>).data ?? row : undefined;
@@ -46,11 +53,33 @@ export async function POST(request: NextRequest, context: { params: Promise<{ fe
             errors.push({ index: i, message: `第 ${i + 1} 行校验失败: ${validated.errors.map((e) => `${e.field}: ${e.message}`).join("; ") || "未知错误"}` });
             continue;
           }
+          // 与单条创建一致的钩子流水线：手册业务规则 + 数据库前置校验 + 数据补全。
+          const businessError = validateRecordBusiness(featureId, validated.data.data);
+          if (businessError) {
+            errors.push({ index: i, message: `第 ${i + 1} 行: ${businessError}` });
+            continue;
+          }
+          const dbError = await validateRecordAgainstDb(featureId, validated.data.data, txDb);
+          if (dbError) {
+            errors.push({ index: i, message: `第 ${i + 1} 行: ${dbError}` });
+            continue;
+          }
+          const enriched = enrichRecordData(featureId, validated.data.data as Record<string, string | number>);
           const id = randomUUID();
           await tx.insert(businessRecords).values({
-            id, featureId, dataJson: validated.data.data, status: validated.data.status, createdBy: session.user.id,
+            id, featureId, dataJson: enriched, status: validated.data.status, createdBy: session.user.id,
           });
           saved.push({ id });
+          // 创建后联动(处分→操行分、旷课→预警、学籍异动→学籍状态)，失败不阻断导入。
+          try {
+            await afterRecordCreated(featureId, enriched as Record<string, string | number>, txDb, session.user.id);
+          } catch (hookError) {
+            writeSystemLog({
+              message: `批量导入记录联动失败: ${hookError instanceof Error ? hookError.message : String(hookError)}`,
+              request,
+              detail: { featureId, index: i, recordId: id },
+            });
+          }
         }
       });
     } catch {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { api, apiErrorMessage, isNetworkError } from "@/lib/api-client";
 
 /**
  * Self-service password change dialog backed by POST /api/auth/password.
@@ -11,6 +12,7 @@ export function ChangePasswordDialog({ csrfToken, onClose, onChanged }: {
   onClose: () => void;
   onChanged: () => void;
 }) {
+  void csrfToken; // CSRF 由 api-client 统一携带
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -23,17 +25,10 @@ export function ChangePasswordDialog({ csrfToken, onClose, onChanged }: {
     if (newPassword !== confirmPassword) { setNotice("两次输入的新密码不一致"); return; }
     setBusy(true);
     try {
-      const response = await fetch("/api/auth/password", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ oldPassword, newPassword }),
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "密码修改失败，请重试"); return; }
+      await api.post("/api/auth/password", { oldPassword, newPassword });
       onChanged();
-    } catch {
-      setNotice("网络异常，密码修改未完成");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常，密码修改未完成" : apiErrorMessage(error, "密码修改失败，请重试"));
     } finally {
       setBusy(false);
     }

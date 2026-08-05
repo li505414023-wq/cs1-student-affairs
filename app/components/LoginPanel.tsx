@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import type { AuthSession } from "./student/student-types";
 import { isValidIdCard } from "@/lib/student-register";
+import { api, isNetworkError, type ApiClientError } from "@/lib/api-client";
 
 type View = "login" | "register" | "done";
 
@@ -17,12 +18,10 @@ export function LoginPanel({ onAuthenticated }: { onAuthenticated: (session: Aut
     setError("");
     const data = new FormData(event.currentTarget);
     try {
-      const response = await fetch("/api/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: data.get("username"), password: data.get("password") }) });
-      const payload = await response.json() as { data: AuthSession; error?: string };
-      if (!response.ok) { setError(payload.error ?? "登录失败"); return; }
-      onAuthenticated(payload.data);
-    } catch {
-      setError("服务暂时无法连接");
+      const session = await api.post<AuthSession>("/api/auth/login", { username: data.get("username"), password: data.get("password") });
+      onAuthenticated(session);
+    } catch (error) {
+      setError(isNetworkError(error) ? "服务暂时无法连接" : (error as ApiClientError).message || "登录失败");
     } finally {
       setSubmitting(false);
     }
@@ -37,25 +36,22 @@ export function LoginPanel({ onAuthenticated }: { onAuthenticated: (session: Aut
     if (String(data.get("password") ?? "") !== String(data.get("confirmPassword") ?? "")) { setError("两次输入的密码不一致"); return; }
     setSubmitting(true);
     try {
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          no: data.get("no"),
-          name: data.get("name"),
-          idCard,
-          password: data.get("password"),
-          confirmPassword: data.get("confirmPassword"),
-        }),
+      await api.post("/api/auth/register", {
+        no: data.get("no"),
+        name: data.get("name"),
+        idCard,
+        password: data.get("password"),
+        confirmPassword: data.get("confirmPassword"),
       });
-      const payload = await response.json() as { error?: string; details?: Array<{ field: string; message: string }> };
-      if (!response.ok) {
-        setError(payload.details?.[0]?.message || payload.error || "注册失败");
-        return;
-      }
       setView("done");
-    } catch {
-      setError("服务暂时无法连接");
+    } catch (error) {
+      if (isNetworkError(error)) {
+        setError("服务暂时无法连接");
+      } else {
+        const apiError = error as ApiClientError;
+        const details = Array.isArray(apiError.details) ? (apiError.details as Array<{ field?: string; message?: string }>) : [];
+        setError(details[0]?.message || apiError.message || "注册失败");
+      }
     } finally {
       setSubmitting(false);
     }

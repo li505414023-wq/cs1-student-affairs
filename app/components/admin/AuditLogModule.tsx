@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { api, isNetworkError } from "@/lib/api-client";
 
 type LogRow = {
   id: string;
@@ -41,14 +42,12 @@ export function AuditLogModule({ feature }: { feature: string }) {
     if (resourceType.trim()) params.set("resourceType", resourceType.trim());
     if (from) params.set("from", from);
     if (to) params.set("to", to);
-    fetch(`/api/admin/logs?${params.toString()}`, { credentials: "same-origin" })
-      .then(async (response) => {
-        if (!response.ok) { setNotice("审计日志加载失败，请重试"); return; }
-        const payload = await response.json() as { data: { items: LogRow[]; pagination: { total: number } } };
-        setRows(payload.data.items);
-        setTotal(payload.data.pagination.total);
+    api.get<{ items: LogRow[]; pagination: { total: number } }>(`/api/admin/logs?${params.toString()}`)
+      .then((data) => {
+        setRows(data.items);
+        setTotal(data.pagination.total);
       })
-      .catch(() => setNotice("网络连接异常，请检查后重试"))
+      .catch((error) => setNotice(isNetworkError(error) ? "网络连接异常，请检查后重试" : "审计日志加载失败，请重试"))
       .finally(() => setIsLoading(false));
   }, [page, action, resourceType, from, to]);
 

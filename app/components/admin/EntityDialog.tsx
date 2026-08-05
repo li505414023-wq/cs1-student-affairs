@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { FormSection } from "../forms/FormSection";
 import type { FieldSpec } from "../forms/FormField";
 import type { EntityFeatureConfig } from "@/lib/entity-features";
+import { api, isNetworkError, type ApiClientError } from "@/lib/api-client";
 
 export type EntityItem = {
   id?: string;
@@ -29,6 +30,7 @@ export function EntityDialog({ config, item, csrfToken, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
+  void csrfToken; // CSRF 由 api-client 统一携带
   const [parentOptions, setParentOptions] = useState<ParentOption[]>([]);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -37,13 +39,12 @@ export function EntityDialog({ config, item, csrfToken, onClose, onSaved }: {
   useEffect(() => {
     if (!config.hierarchical) return;
     let active = true;
-    fetch(`/api/admin/entities/${config.hierarchical.parentFeature}?pageSize=200&status=启用`, { credentials: "same-origin" })
-      .then(async (response) => {
-        if (!response.ok || !active) return;
-        const payload = await response.json() as { data: { items: Array<{ id: string; code: string; name: string }> } };
+    api.get<{ items: Array<{ id: string; code: string; name: string }> }>(`/api/admin/entities/${config.hierarchical.parentFeature}?pageSize=200&status=启用`)
+      .then((data) => {
+        if (!active) return;
         // Self-hierarchical features (dict/menu/org): exclude self to avoid self-parenting.
         setParentOptions(
-          payload.data.items
+          data.items
             .filter((entry) => entry.id !== item?.id)
             .map((entry) => ({ code: entry.code, name: entry.name })),
         );
@@ -95,21 +96,21 @@ export function EntityDialog({ config, item, csrfToken, onClose, onSaved }: {
         status: get("状态") || "启用",
         data: Object.fromEntries(config.fields.map((field) => [field.key, get(field.label)])),
       };
-      const response = await fetch(`/api/admin/entities/${config.featureId}${isEdit ? `/${item?.id}` : ""}`, {
-        method: isEdit ? "PUT" : "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify(payload),
-      });
-      const result = await response.json().catch(() => null) as { error?: string; details?: Array<{ field: string; message: string }> } | null;
-      if (!response.ok) {
-        const detail = result?.details?.map((entry) => entry.message).join(";");
-        setNotice(detail || result?.error || "保存失败,请重试");
-        return;
+      if (isEdit) {
+        await api.put(`/api/admin/entities/${config.featureId}/${item?.id}`, payload);
+      } else {
+        await api.post(`/api/admin/entities/${config.featureId}`, payload);
       }
       onSaved(`${config.label}记录已${isEdit ? "更新" : "创建"}`);
-    } catch {
-      setNotice("网络异常,保存未完成");
+    } catch (error) {
+      if (isNetworkError(error)) {
+        setNotice("网络异常,保存未完成");
+      } else {
+        const apiError = error as ApiClientError;
+        const details = Array.isArray(apiError.details) ? (apiError.details as Array<{ field?: string; message?: string }>) : [];
+        const detail = details.map((entry) => entry.message).join(";");
+        setNotice(detail || apiError.message || "保存失败,请重试");
+      }
     } finally {
       setBusy(false);
     }

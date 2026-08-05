@@ -35,6 +35,16 @@ export const FEATURE_MODEL_MAP: Readonly<Record<string, string>> = {
   "delayed-checkout": "dorm-checkin",
 };
 
+/**
+ * Features a student may browse in read-only mode (own profile / home page)
+ * but never submit records for. Combined with STUDENT_APPLY_FEATURES this is
+ * the single source of truth for student-visible menus (see app/menu-policy).
+ */
+export const STUDENT_READ_ONLY_FEATURES: ReadonlySet<string> = new Set([
+  "student-home",
+  "students",
+]);
+
 export function isStudentApplyFeature(featureId: string): boolean {
   return STUDENT_APPLY_FEATURES.has(featureId);
 }

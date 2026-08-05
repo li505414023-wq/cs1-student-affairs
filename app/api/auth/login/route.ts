@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/db";
 import { users } from "@/db/schema";
-import { createSession, setSessionCookie } from "@/lib/auth";
+import { createSession, scheduleExpiredSessionCleanup, setSessionCookie } from "@/lib/auth";
 import { ApiError, fail, ok, readJson, requestIp, writeAudit } from "@/lib/api";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { verifyPassword } from "@/lib/security";
@@ -52,6 +52,8 @@ export async function POST(request: NextRequest) {
       await getDb().update(users).set({ failedAttempts: 0, lockedUntil: null }).where(eq(users.id, user.id));
     }
     const session = await createSession(user.id);
+    // Opportunistic cleanup of expired sessions (throttled, fire-and-forget).
+    scheduleExpiredSessionCleanup();
     await writeAudit({ userId: user.id, action: "login", resourceType: "session", ip });
     const response = ok({ user: { id: user.id, username: user.username, displayName: user.displayName, role: user.role }, csrfToken: session.csrfToken });
     setSessionCookie(response, session.token, session.expiresAt, request);

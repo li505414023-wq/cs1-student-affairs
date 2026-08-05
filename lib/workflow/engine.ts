@@ -3,7 +3,7 @@ import { eq, and, inArray, count, getTableColumns } from "drizzle-orm";
 import { getDb } from "@/db";
 import { workflowInstances, workflowTasks, workflowEventLog, workflowModels, notifications, businessRecords } from "@/db/schema";
 import { evaluate } from "./expression";
-import { canOperateTask, isFullAccessRole } from "./access";
+import { canOperateTask, isFullAccessRole, assertInstanceAccess } from "./access";
 import { WorkflowError } from "./types";
 import type { WorkflowStatus, AdvanceInput } from "./types";
 
@@ -26,10 +26,10 @@ export class WorkflowEngine {
       .where(eq(workflowModels.key, modelKey))
       .limit(1);
 
-    if (!model) throw new Error(`Workflow model "${modelKey}" not found`);
+    if (!model) throw new WorkflowError(`流程模型 "${modelKey}" 不存在`, 404);
 
     const nodes = (model.nodesJson as Array<Record<string, unknown>>) ?? [];
-    if (nodes.length === 0) throw new Error(`Workflow model "${modelKey}" has no nodes`);
+    if (nodes.length === 0) throw new WorkflowError(`流程模型 "${modelKey}" 未配置节点，无法发起`, 422);
 
     const instanceId = randomUUID();
     const startNode = nodes.find((n: Record<string, unknown>) => n.type === "start") ?? nodes[0];
@@ -98,8 +98,27 @@ export class WorkflowEngine {
       .where(eq(workflowInstances.id, input.instanceId))
       .limit(1);
 
-    if (!instance) throw new Error("Instance not found");
-    if (instance.status !== "运行中") throw new Error(`Instance is ${instance.status}, cannot advance`);
+    if (!instance) throw new WorkflowError("流程实例不存在", 404);
+    if (instance.status !== "运行中") throw new WorkflowError(`流程当前状态为「${instance.status}」，无法推进`, 409);
+
+    // Row-level access check first (starter, (former) assignees, or school-wide
+    // roles). Prevents unrelated users from advancing instances they cannot see.
+    const instanceTasks = await this.db
+      .select()
+      .from(workflowTasks)
+      .where(eq(workflowTasks.instanceId, input.instanceId));
+    assertInstanceAccess(instance, instanceTasks, {
+      id: input.userId,
+      role: input.userRole,
+      roleTags: input.userRoleTags ?? [],
+    });
+
+    // The caller must act on the node the instance is actually sitting at.
+    // Accepting an arbitrary nodeId used to let attackers target start/end nodes
+    // and bypass authorization entirely.
+    if (input.nodeId !== instance.currentNodeId) {
+      throw new WorkflowError("节点与流程当前状态不一致，请刷新后重试", 409);
+    }
 
     // Load model nodes
     const [model] = await this.db
@@ -111,32 +130,36 @@ export class WorkflowEngine {
     const nodes = (model?.nodesJson as Array<Record<string, unknown>>) ?? [];
     const currentNode = nodes.find((n: Record<string, unknown>) => n.id === input.nodeId);
 
-    if (!currentNode) throw new Error(`Node "${input.nodeId}" not found`);
+    if (!currentNode) throw new WorkflowError("流程节点不存在", 409);
 
-    // Complete the current task if it's an actionable node
-    if (!["start", "end"].includes(currentNode.type as string)) {
-      // Authorization: the instance starter, the assignee (by user/role/role tag),
-      // the claimer, or an admin may act.
-      const [pendingTask] = await this.db
-        .select()
-        .from(workflowTasks)
-        .where(
-          and(
-            eq(workflowTasks.instanceId, input.instanceId),
-            eq(workflowTasks.nodeId, input.nodeId),
-            eq(workflowTasks.status, "待处理"),
-          ),
-        )
-        .limit(1);
-      if (
-        pendingTask
-        && instance.startedBy !== input.userId
-        && !canOperateTask(pendingTask, { id: input.userId, role: input.userRole, roleTags: input.userRoleTags })
-      ) {
-        throw new WorkflowError("无权处理该任务", 403);
-      }
-      await this.completeCurrentTask(input.instanceId, input.nodeId, input);
+    // Start/end nodes are transitioned automatically by the engine; they never
+    // carry a pending task and must never be advanced manually.
+    if (["start", "end"].includes(currentNode.type as string)) {
+      throw new WorkflowError("开始/结束节点不能手动推进", 409);
     }
+
+    // Authorization: a pending task must exist on the current node and the
+    // operator must be allowed to work it (claimer, assignee by user/role/tag,
+    // or admin). The instance starter gets no bypass — approvals require a
+    // matching candidate identity.
+    const [pendingTask] = await this.db
+      .select()
+      .from(workflowTasks)
+      .where(
+        and(
+          eq(workflowTasks.instanceId, input.instanceId),
+          eq(workflowTasks.nodeId, input.nodeId),
+          eq(workflowTasks.status, "待处理"),
+        ),
+      )
+      .limit(1);
+    if (!pendingTask) {
+      throw new WorkflowError("该节点暂无待处理任务，无法推进", 409);
+    }
+    if (!canOperateTask(pendingTask, { id: input.userId, role: input.userRole, roleTags: input.userRoleTags ?? [] })) {
+      throw new WorkflowError("无权处理该任务", 403);
+    }
+    await this.completeCurrentTask(input.instanceId, input.nodeId, input);
 
     // Log
     await this.logEvent(input.instanceId, input.nodeId, `node_${input.action}`, input.userId);
@@ -188,7 +211,7 @@ export class WorkflowEngine {
       .where(eq(workflowInstances.id, instanceId))
       .limit(1);
 
-    if (!instance) throw new Error("Instance not found");
+    if (!instance) throw new WorkflowError("流程实例不存在", 404);
     if (instance.status !== "退回待修改") throw new WorkflowError("流程未被退回，无法重新提交", 409);
     if (instance.startedBy !== userId) throw new WorkflowError("只有发起人可以重新提交", 403);
 
@@ -231,7 +254,7 @@ export class WorkflowEngine {
       .where(eq(workflowInstances.id, instanceId))
       .limit(1);
 
-    if (!instance) throw new Error("Instance not found");
+    if (!instance) throw new WorkflowError("流程实例不存在", 404);
     if (instance.startedBy !== userId && userRole !== "admin") {
       throw new WorkflowError("只有发起人或管理员可以撤回流程", 403);
     }
@@ -368,7 +391,21 @@ export class WorkflowEngine {
    * Only tasks with status "待签收" can be claimed; group tasks allow any user with
    * a matching role tag to claim; personal tasks require exact assignee match.
    */
-  async claimTask(taskId: string, userId: string): Promise<boolean> {
+  async claimTask(taskId: string, userId: string, userRole = "", userRoleTags: string[] = []): Promise<boolean> {
+    // Verify the task exists and the claimer is actually a candidate
+    // (assignee value matches user id / role / role tags, or admin).
+    const [task] = await this.db
+      .select()
+      .from(workflowTasks)
+      .where(eq(workflowTasks.id, taskId))
+      .limit(1);
+
+    if (!task) throw new WorkflowError("任务不存在", 404);
+    if (task.status !== "待签收") throw new WorkflowError("任务已被签收或已处理", 409);
+    if (!canOperateTask(task, { id: userId, role: userRole, roleTags: userRoleTags })) {
+      throw new WorkflowError("不属于该任务的候选处理人，无法签收", 403);
+    }
+
     // Atomic claim: the status condition makes concurrent claims race-safe.
     const updated = await this.db
       .update(workflowTasks)

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { api, apiErrorMessage, isNetworkError } from "@/lib/api-client";
 
 type RoleRow = { id: string; code: string; name: string; dataScope: string; builtin: boolean; status: string; userCount: number };
 type BindingRow = { id: string; userId: string; faculty: string | null; major?: string | null; className: string; grade: string | null; corps?: string | null };
@@ -21,6 +22,7 @@ const SCOPES = [
  * Declared scopes for custom roles take full effect in a later version.
  */
 export function DataPermissionModule({ csrfToken }: { csrfToken: string }) {
+  void csrfToken; // CSRF 由 api-client 统一携带
   const [roleRows, setRoleRows] = useState<RoleRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState("");
@@ -38,44 +40,32 @@ export function DataPermissionModule({ csrfToken }: { csrfToken: string }) {
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/admin/roles", { credentials: "same-origin" });
-      if (!response.ok) { setNotice("角色列表加载失败,请重试"); return; }
-      const payload = await response.json() as { data: { items: RoleRow[] } };
-      setRoleRows(payload.data.items);
-    } catch {
-      setNotice("网络连接异常,请检查后重试");
+      const data = await api.get<{ items: RoleRow[] }>("/api/admin/roles");
+      setRoleRows(data.items);
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络连接异常,请检查后重试" : "角色列表加载失败,请重试");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   const loadBindings = useCallback(async () => {
-    try {
-      const [bindingRes, counselorRes, classRes] = await Promise.all([
-        fetch("/api/counselor-classes", { credentials: "same-origin" }),
-        fetch("/api/admin/users?role=counselor&pageSize=100", { credentials: "same-origin" }),
-        fetch("/api/records/classes?pageSize=100", { credentials: "same-origin" }),
-      ]);
-      if (bindingRes.ok) {
-        const payload = await bindingRes.json() as { data: BindingRow[] };
-        setBindings(payload.data);
+    // 各请求独立容错:单个失败不阻塞其余数据(与现状一致)。
+    const [bindingResult, counselorResult, classResult] = await Promise.allSettled([
+      api.get<BindingRow[]>("/api/counselor-classes"),
+      api.get<{ items: CounselorOption[] }>("/api/admin/users?role=counselor&pageSize=100"),
+      api.get<{ items: Array<{ data?: Record<string, string> }> }>("/api/records/classes?pageSize=100"),
+    ]);
+    if (bindingResult.status === "fulfilled") setBindings(bindingResult.value);
+    if (counselorResult.status === "fulfilled") setCounselors(counselorResult.value.items);
+    if (classResult.status === "fulfilled") {
+      // 班级与警务区队统一存于 business_records(feature_id=classes)，同名班级/区队去重。
+      const seen = new Map<string, ClassOption>();
+      for (const row of classResult.value.items ?? []) {
+        const name = row.data?.["班级名称"] ?? "";
+        if (name && !seen.has(name)) seen.set(name, { name, grade: row.data?.["所属年级"] ?? "", faculty: row.data?.["院系名称"] ?? "", major: row.data?.["专业名称"] ?? "" });
       }
-      if (counselorRes.ok) {
-        const payload = await counselorRes.json() as { data: { items: CounselorOption[] } };
-        setCounselors(payload.data.items);
-      }
-      if (classRes.ok) {
-        // 班级与警务区队统一存于 business_records(feature_id=classes)，同名班级/区队去重。
-        const payload = await classRes.json() as { data: { items: Array<{ data?: Record<string, string> }> } };
-        const seen = new Map<string, ClassOption>();
-        for (const row of payload.data.items ?? []) {
-          const name = row.data?.["班级名称"] ?? "";
-          if (name && !seen.has(name)) seen.set(name, { name, grade: row.data?.["所属年级"] ?? "", faculty: row.data?.["院系名称"] ?? "", major: row.data?.["专业名称"] ?? "" });
-        }
-        setClasses([...seen.values()]);
-      }
-    } catch {
-      /* 绑定面板加载失败不阻塞角色配置区 */
+      setClasses([...seen.values()]);
     }
   }, []);
 
@@ -95,47 +85,30 @@ export function DataPermissionModule({ csrfToken }: { csrfToken: string }) {
       const counselor = counselors.find((c) => c.id === selectedCounselor);
       const classItem = classes.find((c) => c.name === selectedClass);
       const grade = classItem?.grade ?? "";
-      const response = await fetch("/api/counselor-classes", {
-        method: "POST", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ userId: selectedCounselor, className: selectedClass, faculty: selectedFaculty, major: selectedMajor, grade }),
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "绑定失败"); return; }
+      await api.post("/api/counselor-classes", { userId: selectedCounselor, className: selectedClass, faculty: selectedFaculty, major: selectedMajor, grade });
       setNotice(`已绑定 ${counselor?.displayName ?? "辅导员"} → ${selectedFaculty}/${selectedMajor}/${selectedClass}`);
       setSelectedCounselor(""); setSelectedFaculty(""); setSelectedMajor(""); setSelectedClass("");
       void loadBindings();
-    } catch { setNotice("网络异常,绑定未完成"); } finally { setBindingBusy(false); }
+    } catch (error) { setNotice(isNetworkError(error) ? "网络异常,绑定未完成" : apiErrorMessage(error, "绑定失败")); } finally { setBindingBusy(false); }
   };
 
   const removeBinding = async (binding: BindingRow) => {
     if (!window.confirm(`确认解除 ${counselorName(binding.userId)} 与 ${binding.className} 的绑定？`)) return;
     setBindingBusy(true);
     try {
-      const response = await fetch("/api/counselor-classes", {
-        method: "DELETE", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ id: binding.id }),
-      });
-      if (!response.ok) { setNotice("解除绑定失败"); return; }
+      await api.del("/api/counselor-classes", { id: binding.id });
       setNotice(`已解除 ${binding.className} 的绑定`);
       void loadBindings();
-    } catch { setNotice("网络异常,解除绑定未完成"); } finally { setBindingBusy(false); }
+    } catch (error) { setNotice(isNetworkError(error) ? "网络异常,解除绑定未完成" : "解除绑定失败"); } finally { setBindingBusy(false); }
   };
 
   const setScope = async (role: RoleRow, dataScope: string) => {
     setBusyId(role.id);
     try {
-      const response = await fetch(`/api/admin/roles/${role.id}`, {
-        method: "PUT", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ dataScope }),
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "保存失败"); return; }
+      await api.put(`/api/admin/roles/${role.id}`, { dataScope });
       setNotice(`已更新 ${role.name} 的数据范围`);
       void load();
-    } catch { setNotice("网络异常,保存未完成"); } finally { setBusyId(null); }
+    } catch (error) { setNotice(isNetworkError(error) ? "网络异常,保存未完成" : apiErrorMessage(error, "保存失败")); } finally { setBusyId(null); }
   };
 
   return (

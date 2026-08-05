@@ -4,6 +4,7 @@ import { getDb } from "@/db";
 import { systemLogs } from "@/db/schema";
 import { requirePermission } from "@/lib/auth";
 import { fail, ok } from "@/lib/api";
+import { parsePagination, queryText } from "@/lib/http-utils";
 
 export const runtime = "nodejs";
 
@@ -11,13 +12,12 @@ export async function GET(request: NextRequest) {
   try {
     await requirePermission(request, "admin");
     const url = new URL(request.url);
-    const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
-    const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("pageSize")) || 30));
-    const level = url.searchParams.get("level")?.trim() ?? "";
-    const category = url.searchParams.get("category")?.trim() ?? "";
-    const keyword = url.searchParams.get("keyword")?.trim() ?? "";
-    const from = url.searchParams.get("from")?.trim() ?? "";
-    const to = url.searchParams.get("to")?.trim() ?? "";
+    const { page, pageSize } = parsePagination(url, { defaultPageSize: 30 });
+    const level = queryText(url, "level");
+    const category = queryText(url, "category");
+    const keyword = queryText(url, "keyword");
+    const from = queryText(url, "from");
+    const to = queryText(url, "to");
 
     const levelCondition = level ? eq(systemLogs.level, level) : undefined;
     const categoryCondition = category ? eq(systemLogs.category, category) : undefined;

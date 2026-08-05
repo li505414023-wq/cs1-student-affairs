@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { api, apiErrorMessage, isNetworkError } from "@/lib/api-client";
 
 const WORKFLOW_TASK_FEATURES = new Set(["todo", "claim", "my-request", "my-done", "finished", "copied", "new-flow"]);
 
@@ -62,6 +63,7 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
   focusInstanceId?: string | null;
   onConsumedFocus?: () => void;
 }) {
+  void csrfToken; // CSRF 由 api-client 统一携带
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [instances, setInstances] = useState<InstanceItem[]>([]);
   const [designData, setDesignData] = useState<{ forms: WorkflowForm[]; models: WorkflowModel[]; deployments: Deployment[] } | null>(null);
@@ -79,27 +81,25 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
 
   const load = useCallback(async () => {
     setIsLoading(true);
+    let failureMessage = "数据加载失败，请重试";
     try {
       if (usesTasks) {
+        failureMessage = "待办数据加载失败，请重试";
         const type = featureId === "todo" ? "todo" : featureId === "claim" ? "claim" : "done";
-        const response = await fetch(`/api/workflow/tasks?type=${type}`, { credentials: "same-origin" });
-        if (!response.ok) { setNotice("待办数据加载失败，请重试"); return; }
-        const payload = await response.json() as { data: { tasks: TaskItem[] } };
-        setTasks(payload.data.tasks);
+        const data = await api.get<{ tasks: TaskItem[] }>(`/api/workflow/tasks?type=${type}`);
+        setTasks(data.tasks);
       } else if (usesInstances) {
+        failureMessage = "流程数据加载失败，请重试";
         const query = featureId === "finished" ? "?status=已完成&pageSize=50" : "?pageSize=50";
-        const response = await fetch(`/api/workflow/instances${query}`, { credentials: "same-origin" });
-        if (!response.ok) { setNotice("流程数据加载失败，请重试"); return; }
-        const payload = await response.json() as { data: { items: InstanceItem[] } };
-        setInstances(payload.data.items);
+        const data = await api.get<{ items: InstanceItem[] }>(`/api/workflow/instances${query}`);
+        setInstances(data.items);
       } else if (featureId === "new-flow") {
-        const response = await fetch("/api/workflows", { credentials: "same-origin" });
-        if (!response.ok) { setNotice("流程配置加载失败，请重试"); return; }
-        const payload = await response.json() as { data: { forms: WorkflowForm[]; models: WorkflowModel[]; deployments: Deployment[] } };
-        setDesignData(payload.data);
+        failureMessage = "流程配置加载失败，请重试";
+        const data = await api.get<{ forms: WorkflowForm[]; models: WorkflowModel[]; deployments: Deployment[] }>("/api/workflows");
+        setDesignData(data);
       }
-    } catch {
-      setNotice("网络连接异常，请检查后重试");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络连接异常，请检查后重试" : apiErrorMessage(error, failureMessage));
     } finally {
       setIsLoading(false);
     }
@@ -112,16 +112,10 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
     setActiveTask(task);
     setComment("");
     try {
-      const response = await fetch(`/api/workflow/instances/${instanceId}`, { credentials: "same-origin" });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null) as { error?: string } | null;
-        setNotice(payload?.error ?? "无法打开流程详情");
-        return;
-      }
-      const payload = await response.json() as { data: InstanceDetail };
-      setDetail(payload.data);
-    } catch {
-      setNotice("网络连接异常，无法打开流程详情");
+      const data = await api.get<InstanceDetail>(`/api/workflow/instances/${instanceId}`);
+      setDetail(data);
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络连接异常，无法打开流程详情" : apiErrorMessage(error, "无法打开流程详情"));
     } finally {
       setDetailLoading(false);
     }
@@ -138,22 +132,16 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
     if (!detail || !activeTask) return;
     setBusy(true);
     try {
-      const response = await fetch(`/api/workflow/instances/${detail.instance.id}`, {
-        method: "POST", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({
-          nodeId: activeTask.nodeId, action,
-          result: action === "approve" ? "同意" : action === "reject" ? "拒绝" : "退回",
-          comment,
-        }),
+      await api.post(`/api/workflow/instances/${detail.instance.id}`, {
+        nodeId: activeTask.nodeId, action,
+        result: action === "approve" ? "同意" : action === "reject" ? "拒绝" : "退回",
+        comment,
       });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "处理失败，请重试"); return; }
       setNotice(`已处理：${detail.instance.title ?? "流程实例"}（${action === "approve" ? "同意" : action === "reject" ? "拒绝" : "退回"}）`);
       setDetail(null);
       void load();
-    } catch {
-      setNotice("网络异常，处理未完成");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常，处理未完成" : apiErrorMessage(error, "处理失败，请重试"));
     } finally {
       setBusy(false);
     }
@@ -162,17 +150,11 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
   const claimTask = async (task: TaskItem) => {
     setBusy(true);
     try {
-      const response = await fetch("/api/workflow/tasks", {
-        method: "POST", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ taskId: task.id, action: "claim" }),
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "签收失败，请重试"); return; }
+      await api.post("/api/workflow/tasks", { taskId: task.id, action: "claim" });
       setNotice(`已签收：${task.instanceTitle || task.nodeName || "流程任务"}`);
       void load();
-    } catch {
-      setNotice("网络异常，签收未完成");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常，签收未完成" : apiErrorMessage(error, "签收失败，请重试"));
     } finally {
       setBusy(false);
     }
@@ -181,17 +163,11 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
   const resubmitInstance = async (instance: InstanceItem) => {
     setBusy(true);
     try {
-      const response = await fetch(`/api/workflow/instances/${instance.id}`, {
-        method: "POST", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ action: "resubmit" }),
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "重新提交失败，请重试"); return; }
+      await api.post(`/api/workflow/instances/${instance.id}`, { action: "resubmit" });
       setNotice(`已重新提交：${instance.title ?? "流程实例"}`);
       void load();
-    } catch {
-      setNotice("网络异常，重新提交未完成");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常，重新提交未完成" : apiErrorMessage(error, "重新提交失败，请重试"));
     } finally {
       setBusy(false);
     }
@@ -200,16 +176,11 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
   const cancelInstance = async (instance: InstanceItem) => {
     setBusy(true);
     try {
-      const response = await fetch(`/api/workflow/instances/${instance.id}`, {
-        method: "DELETE", credentials: "same-origin",
-        headers: { "x-csrf-token": csrfToken },
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "撤回失败，请重试"); return; }
+      await api.del(`/api/workflow/instances/${instance.id}`);
       setNotice(`已撤回：${instance.title ?? "流程实例"}`);
       void load();
-    } catch {
-      setNotice("网络异常，撤回未完成");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常，撤回未完成" : apiErrorMessage(error, "撤回失败，请重试"));
     } finally {
       setBusy(false);
     }
@@ -219,17 +190,11 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
     if (!startForm) return;
     setBusy(true);
     try {
-      const response = await fetch("/api/workflow/instances", {
-        method: "POST", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ modelKey: startForm.deployment.modelKey, formData }),
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "发起流程失败，请重试"); return; }
+      await api.post("/api/workflow/instances", { modelKey: startForm.deployment.modelKey, formData });
       setNotice(`已发起：${startForm.deployment.modelName}`);
       setStartForm(null);
-    } catch {
-      setNotice("网络异常，发起未完成");
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常，发起未完成" : apiErrorMessage(error, "发起流程失败，请重试"));
     } finally {
       setBusy(false);
     }

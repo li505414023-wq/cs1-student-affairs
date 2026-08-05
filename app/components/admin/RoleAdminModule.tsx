@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { api, apiErrorMessage, isNetworkError } from "@/lib/api-client";
 
 type RoleRow = {
   id: string;
@@ -35,12 +36,10 @@ export function RoleAdminModule({ csrfToken }: { csrfToken: string }) {
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/admin/roles", { credentials: "same-origin" });
-      if (!response.ok) { setNotice("角色列表加载失败,请重试"); return; }
-      const payload = await response.json() as { data: { items: RoleRow[] } };
-      setRoleRows(payload.data.items);
-    } catch {
-      setNotice("网络连接异常,请检查后重试");
+      const data = await api.get<{ items: RoleRow[] }>("/api/admin/roles");
+      setRoleRows(data.items);
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络连接异常,请检查后重试" : "角色列表加载失败,请重试");
     } finally {
       setIsLoading(false);
     }
@@ -52,27 +51,23 @@ export function RoleAdminModule({ csrfToken }: { csrfToken: string }) {
     if (!window.confirm(`确认删除角色「${role.name}」吗?`)) return;
     setBusyId(role.id);
     try {
-      const response = await fetch(`/api/admin/roles/${role.id}`, { method: "DELETE", credentials: "same-origin", headers: { "x-csrf-token": csrfToken } });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "删除失败"); return; }
+      await api.del(`/api/admin/roles/${role.id}`);
       setNotice(`已删除角色:${role.name}`);
       void load();
-    } catch { setNotice("网络异常,删除未完成"); } finally { setBusyId(null); }
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常,删除未完成" : apiErrorMessage(error, "删除失败"));
+    } finally { setBusyId(null); }
   };
 
   const toggleStatus = async (role: RoleRow) => {
     setBusyId(role.id);
     try {
-      const response = await fetch(`/api/admin/roles/${role.id}`, {
-        method: "PUT", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ status: role.status === "启用" ? "停用" : "启用" }),
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "操作失败"); return; }
+      await api.put(`/api/admin/roles/${role.id}`, { status: role.status === "启用" ? "停用" : "启用" });
       setNotice(`已${role.status === "启用" ? "停用" : "启用"}角色:${role.name}`);
       void load();
-    } catch { setNotice("网络异常,操作未完成"); } finally { setBusyId(null); }
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常,操作未完成" : apiErrorMessage(error, "操作失败"));
+    } finally { setBusyId(null); }
   };
 
   return (
@@ -131,6 +126,7 @@ function RoleDialog({ role, csrfToken, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
+  void csrfToken; // CSRF 由 api-client 统一携带
   const isEdit = Boolean(role);
   const isAdminRole = role?.code === "admin";
   const [form, setForm] = useState({
@@ -162,15 +158,15 @@ function RoleDialog({ role, csrfToken, onClose, onSaved }: {
         tags: form.tags.split(/[,，]/).map((t) => t.trim()).filter(Boolean),
         dataScope: form.dataScope,
       };
-      const response = await fetch(isEdit ? `/api/admin/roles/${role?.id}` : "/api/admin/roles", {
-        method: isEdit ? "PUT" : "POST", credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify(body),
-      });
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) { setNotice(payload?.error ?? "保存失败,请重试"); return; }
+      if (isEdit) {
+        await api.put(`/api/admin/roles/${role?.id}`, body);
+      } else {
+        await api.post("/api/admin/roles", body);
+      }
       onSaved(`角色已${isEdit ? "更新" : "创建"},权限变更即时生效`);
-    } catch { setNotice("网络异常,保存未完成"); } finally { setBusy(false); }
+    } catch (error) {
+      setNotice(isNetworkError(error) ? "网络异常,保存未完成" : apiErrorMessage(error, "保存失败,请重试"));
+    } finally { setBusy(false); }
   };
 
   const inputStyle = { width: "100%", padding: 8 };

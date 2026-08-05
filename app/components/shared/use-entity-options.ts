@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { api } from "@/lib/api-client";
 
 export type EntityOption = { code: string; name: string };
 
@@ -15,9 +16,8 @@ export function useEntityOptions(feature: string, parentCode?: string | null): E
     let active = true;
     const params = new URLSearchParams({ feature });
     if (parentCode) params.set("parentCode", parentCode);
-    fetch(`/api/reference/options?${params.toString()}`, { credentials: "same-origin" })
-      .then(async (response) => (response.ok ? (await response.json() as { data: { items: EntityOption[] } }).data.items : []))
-      .then((list: EntityOption[]) => { if (active) setItems(list ?? []); })
+    api.get<{ items: EntityOption[] }>(`/api/reference/options?${params.toString()}`)
+      .then((data) => { if (active) setItems(data.items ?? []); })
       .catch(() => { if (active) setItems([]); });
     return () => { active = false; };
   }, [feature, parentCode]);

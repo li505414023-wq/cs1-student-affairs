@@ -8,6 +8,7 @@ import { getEntityConfig, type EntityFeatureConfig } from "@/lib/entity-features
 import { validateEntityInput } from "@/lib/validation-entities";
 import { validateEntityUniqueness } from "@/lib/records-hooks";
 import { ApiError, fail, isUniqueViolation, ok, readJson, requestIp, writeAudit } from "@/lib/api";
+import { parsePagination, queryText } from "@/lib/http-utils";
 
 export const runtime = "nodejs";
 
@@ -53,10 +54,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ fea
     const { featureId } = await context.params;
     const config = resolveConfig(featureId);
     const url = new URL(request.url);
-    const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
-    const pageSize = Math.min(200, Math.max(1, Number(url.searchParams.get("pageSize")) || 20));
-    const keyword = url.searchParams.get("keyword")?.trim() ?? "";
-    const status = url.searchParams.get("status")?.trim() ?? "";
+    const { page, pageSize } = parsePagination(url, { maxPageSize: 200 });
+    const keyword = queryText(url, "keyword");
+    const status = queryText(url, "status");
     const parentCode = url.searchParams.get("parentCode");
 
     const keywordCondition = keyword

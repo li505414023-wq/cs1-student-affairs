@@ -1,18 +1,13 @@
 import type { NextRequest } from "next/server";
 import { WorkflowEngine } from "@/lib/workflow/engine";
 import { assertInstanceAccess } from "@/lib/workflow/access";
-import { WorkflowError } from "@/lib/workflow/types";
+import { failWorkflow } from "@/lib/workflow/api";
 import { requirePermission, validateCsrf } from "@/lib/auth";
 import { ApiError, fail, ok, readJson, writeAudit, requestIp } from "@/lib/api";
 
 export const runtime = "nodejs";
 
 const engine = new WorkflowEngine();
-
-function failWithWorkflowErrors(error: unknown, request?: Request) {
-  if (error instanceof WorkflowError) return fail(new ApiError(error.status, error.message), request);
-  return fail(error, request);
-}
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -37,6 +32,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // write permission, so we gate it with read + engine-level ownership checks.
     const session = await requirePermission(request, action === "resubmit" ? "read" : "write");
     validateCsrf(request, session);
+    // Row-level authorization (same as GET): starter, (former) assignees, or
+    // school-wide roles. Defense in depth — the engine re-checks on advance.
+    const detail = await engine.getStatus(id);
+    if (!detail) throw new ApiError(404, "流程实例不存在");
+    assertInstanceAccess(detail.instance, detail.tasks, session.user);
     if (action === "resubmit") {
       const result = await engine.resubmit(id, session.user.id);
       await writeAudit({ userId: session.user.id, action: "resubmit_workflow", resourceType: "workflow_instance", resourceId: id, ip: requestIp(request) });
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     await writeAudit({ userId: session.user.id, action: "advance_workflow", resourceType: "workflow_instance", resourceId: id, detail: { nodeId: body?.nodeId, action, result }, ip: requestIp(request) });
     return ok(result);
   } catch (error) {
-    return failWithWorkflowErrors(error, request);
+    return failWorkflow(error, request);
   }
 }
 
@@ -68,6 +68,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     await writeAudit({ userId: session.user.id, action: "cancel_workflow", resourceType: "workflow_instance", resourceId: id, ip: requestIp(request) });
     return ok({ cancelled: true });
   } catch (error) {
-    return failWithWorkflowErrors(error, request);
+    return failWorkflow(error, request);
   }
 }

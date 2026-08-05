@@ -5,6 +5,7 @@ import { getDb } from "@/db";
 import { students, counselorClasses } from "@/db/schema";
 import { requirePermission, validateCsrf } from "@/lib/auth";
 import { ApiError, fail, isUniqueViolation, ok, readJson, requestIp, writeAudit } from "@/lib/api";
+import { parsePagination, queryText } from "@/lib/http-utils";
 import { validateStudentInput } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -19,13 +20,12 @@ function withoutIdCard<T extends Record<string, unknown> | null | undefined>(row
 export async function GET(request: NextRequest) {
   try {
     const session = await requirePermission(request, "read");
-    const page = Math.max(1, Number(request.nextUrl.searchParams.get("page") ?? 1));
-    const pageSize = Math.min(100, Math.max(1, Number(request.nextUrl.searchParams.get("pageSize") ?? 20)));
-    const keyword = request.nextUrl.searchParams.get("keyword")?.trim() ?? "";
-    const faculty = request.nextUrl.searchParams.get("faculty")?.trim() ?? "";
-    const major = request.nextUrl.searchParams.get("major")?.trim() ?? "";
-    const className = request.nextUrl.searchParams.get("className")?.trim() ?? "";
-    const grade = request.nextUrl.searchParams.get("grade")?.trim() ?? "";
+    const { page, pageSize } = parsePagination(request.nextUrl);
+    const keyword = queryText(request.nextUrl, "keyword");
+    const faculty = queryText(request.nextUrl, "faculty");
+    const major = queryText(request.nextUrl, "major");
+    const className = queryText(request.nextUrl, "className");
+    const grade = queryText(request.nextUrl, "grade");
 
     // Build conditions: keyword search + field filters + data scope
     const conditions = [];
