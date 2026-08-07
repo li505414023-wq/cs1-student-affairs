@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import type { AuthSession } from "./student/student-types";
+import { ShieldMark } from "./shared/ShieldMark";
 import { isValidIdCard } from "@/lib/student-register";
 import { api, isNetworkError, type ApiClientError } from "@/lib/api-client";
 
@@ -62,11 +63,12 @@ export function LoginPanel({ onAuthenticated }: { onAuthenticated: (session: Aut
   return (
     <div className="login-screen">
       <div className="login-statement" aria-hidden="true">
-        <span className="login-tagline">学生事务管理平台</span>
-        <span className="login-ghost">学工</span>
+        <ShieldMark className="login-emblem" size={120} />
+        <span className="login-tagline">忠诚 严谨 勤学 尚武</span>
+        <span className="login-ghost">警校</span>
       </div>
       <section className="login-card">
-        <div className="login-logo">智</div>
+        <div className="login-logo"><ShieldMark size={32} /></div>
         {view === "done" ? (
           <>
             <h1>注册成功</h1>
