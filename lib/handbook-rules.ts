@@ -80,10 +80,6 @@ export const APPEAL_DEADLINE_DAYS = 10;
 /** 学申委15日内作出复查结论,经批准可延长15日。 */
 export const APPEAL_REVIEW_DAYS = 15;
 
-export function appealReviewDaysGuard(): number {
-  return APPEAL_REVIEW_DAYS;
-}
-
 export function isAppealInDeadline(decisionDate: string, appealDate: string): boolean {
   const decision = new Date(decisionDate);
   const appeal = new Date(appealDate);

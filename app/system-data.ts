@@ -60,8 +60,8 @@ export const featureGroups: FeatureGroup[] = [
     icon: "助",
     children: [
       { label: "勤工助学", features: [{ id: "work-study", label: "勤工助学管理", stage: "review" }, { id: "employers", label: "用人单位管理", stage: "config" }, { id: "jobs", label: "岗位管理", stage: "config" }] },
-      { label: "困难补助", features: [{ id: "hardship", label: "困难补助管理", stage: "review" }, { id: "hardship-type", label: "困难补助种类", stage: "config" }, { id: "hardship-batch", label: "困难补助批次", stage: "batch" }] },
-      { label: "助学金", features: [{ id: "grants", label: "助学金评定", stage: "review" }, { id: "grant-type", label: "助学金种类", stage: "config" }, { id: "grant-batch", label: "助学金批次", stage: "batch" }, { id: "grant-mutex", label: "不可兼得设置", stage: "config" }] },
+      { label: "困难补助", features: [{ id: "hardship", label: "困难补助", stage: "review" }] },
+      { label: "助学金", features: [{ id: "grants", label: "助学金评定", stage: "review" }] },
       { label: "学费减免", features: [{ id: "tuition-reduction", label: "学费减免申请", stage: "review" }] },
       { label: "助学贷款", features: [{ id: "loans", label: "贷款管理", stage: "review" }] },
     ],
@@ -71,9 +71,9 @@ export const featureGroups: FeatureGroup[] = [
     label: "奖罚管理",
     icon: "奖",
     children: [
-      { label: "奖学金管理", features: [{ id: "scholarship", label: "奖学金评定", stage: "review" }, { id: "scholarship-type", label: "奖学金种类", stage: "config" }, { id: "scholarship-batch", label: "奖学金批次", stage: "batch" }, { id: "scholarship-mutex", label: "不可兼得设置", stage: "config" }] },
-      { label: "荣誉称号管理", features: [{ id: "personal-honor", label: "个人荣誉称号管理", stage: "review" }, { id: "collective-honor", label: "集体荣誉称号管理", stage: "review" }, { id: "honor-type", label: "荣誉称号种类", stage: "config" }, { id: "honor-batch", label: "荣誉称号批次", stage: "batch" }] },
-      { label: "违纪处分", features: [{ id: "discipline", label: "违纪管理", stage: "apply" }, { id: "discipline-view", label: "违纪查看", stage: "archive" }, { id: "punishment", label: "处分管理", stage: "review" }, { id: "appeal", label: "处分申诉", stage: "review" }, { id: "revoke", label: "处分撤销", stage: "review" }, { id: "discipline-type", label: "违纪类型", stage: "config" }, { id: "punishment-type", label: "处分类型", stage: "config" }] },
+      { label: "奖学金管理", features: [{ id: "scholarship", label: "奖学金评定", stage: "review" }] },
+      { label: "荣誉称号管理", features: [{ id: "honor", label: "荣誉称号", stage: "review" }] },
+      { label: "违纪处分", features: [{ id: "discipline", label: "违纪管理", stage: "apply" }, { id: "punishment", label: "处分管理", stage: "review" }, { id: "revoke", label: "处分撤销", stage: "review" }, { id: "discipline-type", label: "违纪类型", stage: "config" }, { id: "punishment-type", label: "处分类型", stage: "config" }] },
     ],
   },
   {
@@ -81,7 +81,7 @@ export const featureGroups: FeatureGroup[] = [
     label: "团委工作",
     icon: "团",
     children: [
-      { label: "社团管理", features: [{ id: "clubs", label: "学生社团" }, { id: "club-apply", label: "成立社团申请", stage: "apply" }, { id: "managed-clubs", label: "我管理的社团" }, { id: "started-clubs", label: "我发起的社团" }, { id: "joined-clubs", label: "我参加的社团" }] },
+      { label: "社团管理", features: [{ id: "clubs", label: "学生社团" }, { id: "club-apply", label: "成立社团申请", stage: "apply" }] },
       { label: "团员团籍", features: [{ id: "league-member", label: "入团管理", stage: "review" }] },
       { label: "第二课堂", features: [{ id: "second-class", label: "第二课堂管理", stage: "review" }, { id: "transcript", label: "第二课堂成绩单", stage: "archive" }, { id: "second-class-rules", label: "第二课堂规则设置", stage: "config" }] },
     ],
@@ -105,8 +105,7 @@ export const welcomeFeatureGroups: FeatureGroup[] = [
     { label: "缴费管理", features: [{ id: "welcome-payment-list", label: "缴费管理", stage: "review" }, { id: "welcome-payment-proof", label: "缴费凭证", stage: "archive" }] },
   ] },
   { id: "welcome-stats", label: "迎新统计", icon: "统", children: [
-    { label: "报到统计", features: [{ id: "faculty-checkin-stats", label: "学院报到统计", stage: "archive" }, { id: "class-checkin-stats", label: "班级报到统计", stage: "archive" }, { id: "live-checkin-stats", label: "报到实时分析", stage: "archive" }] },
-    { label: "迎新统计", features: [{ id: "supplies-stats", label: "生活用品统计", stage: "archive" }, { id: "transport-stats", label: "乘车信息统计", stage: "archive" }, { id: "payment-stats", label: "缴费信息统计", stage: "archive" }, { id: "step-stats", label: "环节统计", stage: "archive" }, { id: "nation-stats", label: "民族统计", stage: "archive" }, { id: "welcome-dorm-stats", label: "宿舍统计", stage: "archive" }] },
+    { label: "迎新统计", features: [{ id: "welcome-stats", label: "迎新统计", stage: "archive" }] },
   ] },
   { id: "welcome-publish", label: "迎新发布", icon: "发", children: [
     { label: "报到须知", features: [{ id: "welcome-notes", label: "报到须知", stage: "config" }] },
@@ -130,7 +129,7 @@ export const dormFeatureGroups: FeatureGroup[] = [
     { label: "分配管理", features: [{ id: "dorm-assign", label: "分配宿舍", stage: "review" }] },
   ] },
   { id: "dorm-application", label: "住宿申办", icon: "住", children: [
-    { label: "住宿申办", features: [{ id: "dorm-checkin", label: "入住", stage: "apply" }, { id: "dorm-transfer", label: "调整宿舍", stage: "apply" }, { id: "dorm-checkout", label: "退宿", stage: "apply" }, { id: "holiday-dorm", label: "假期宿舍", stage: "apply" }, { id: "delayed-checkout", label: "延缓退宿", stage: "apply" }] },
+    { label: "住宿申办", features: [{ id: "dorm-checkin", label: "住宿申办", stage: "apply" }] },
   ] },
   { id: "dorm-movement", label: "住调退", icon: "调", children: [
     { label: "住调退", features: [{ id: "dorm-movement-list", label: "住调退", stage: "review" }, { id: "dorm-movement-log", label: "调动日志", stage: "archive" }] },
@@ -156,8 +155,6 @@ export const dormFeatureGroups: FeatureGroup[] = [
 export const policeFeatureGroups: FeatureGroup[] = [
   { id: "police-org", label: "组织架构", icon: "队", children: [
     { label: "学生大队", features: [{ id: "corps-admin", label: "学生大队管理", stage: "config" }] },
-    // 公安院校的区队即班级，复用班级管理（classes）同一套数据与后端。
-    { label: "区队管理", features: [{ id: "classes", label: "区队管理", stage: "config" }] },
   ] },
   { id: "police-discipline", label: "日常纪律", icon: "纪", children: [
     { label: "早操管理", features: [{ id: "morning-exercise", label: "早操考勤", stage: "review" }] },
@@ -185,7 +182,7 @@ export const policeFeatureGroups: FeatureGroup[] = [
 export const adminFeatureGroups: FeatureGroup[] = [
   { id: "workflow", label: "协同办公", icon: "流", children: [
     { label: "流程设计", features: [{ id: "model-design", label: "模型设计", stage: "config" }, { id: "form-design", label: "表单设计", stage: "config" }, { id: "deployment", label: "部署管理", stage: "config" }, { id: "flow-button", label: "流程按钮", stage: "config" }, { id: "flow-category", label: "流程分类", stage: "config" }, { id: "form-default", label: "表单默认值", stage: "config" }, { id: "flow-expression", label: "流程表达式", stage: "config" }] },
-    { label: "我的事务", features: [{ id: "new-flow", label: "新建流程", stage: "apply" }, { id: "todo", label: "待办事宜", stage: "review" }, { id: "my-request", label: "我的请求", stage: "review" }, { id: "my-done", label: "我的已办", stage: "archive" }, { id: "finished", label: "办结事宜", stage: "archive" }, { id: "claim", label: "待签事务", stage: "review" }, { id: "copied", label: "抄送事宜", stage: "archive" }] },
+    { label: "我的事务", features: [{ id: "new-flow", label: "新建流程", stage: "apply" }, { id: "todo", label: "待办事宜", stage: "review" }, { id: "my-request", label: "我的请求", stage: "review" }, { id: "done", label: "已办结", stage: "archive" }] },
     { label: "流程运维", features: [{ id: "ops-schedule", label: "运维调度", stage: "review" }, { id: "ops-finished", label: "办结流程", stage: "archive" }, { id: "process-list", label: "流程列表", stage: "archive" }, { id: "process-agent", label: "流程代理", stage: "config" }] },
   ] },
   { id: "political-work", label: "政工管理", icon: "政", children: [

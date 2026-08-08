@@ -2,8 +2,8 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { getDb } from "@/db";
 import { businessRecords, managedItems, students } from "@/db/schema";
+import { STATUS_CHANGE_TYPES } from "@/lib/dictionaries.js";
 import {
-  ABSENCE_PER_HOUR_DEDUCTION,
   absencePunishment,
   absenceWarningLevel,
   CONDUCT_BASE_SCORE,
@@ -40,7 +40,7 @@ export function validateRecordBusiness(featureId: string, data: Record<string, u
   }
   if (featureId === "status-change") {
     const type = str(data["异动类型"]);
-    const allowed = ["休学", "复学", "学业警示", "留级", "退学", "转专业", "转系"];
+    const allowed = STATUS_CHANGE_TYPES;
     if (type && !allowed.includes(type)) return `异动类型不正确,可选:${allowed.join("/")}`;
   }
   return null;
@@ -62,12 +62,16 @@ export function enrichRecordData(featureId: string, data: RecordData): RecordDat
 }
 
 function leaveDays(data: Record<string, unknown>): number | null {
-  const explicit = Number(str(data["请假天数"]));
-  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  // 日期优先:天数由起止日期推导,防止显式"请假天数"被篡改后绕过分级审批链;
+  // 显式值仅在缺少日期时兜底。
   const start = new Date(str(data["开始时间"] || data["开始日期"]));
   const end = new Date(str(data["结束时间"] || data["结束日期"]));
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-  return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+  if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+    return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+  }
+  const explicit = Number(str(data["请假天数"]));
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  return null;
 }
 
 /**
@@ -253,5 +257,3 @@ function currentTerm(): string {
   const year = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
   return `${year}-${year + 1}学年${now.getMonth() >= 1 && now.getMonth() <= 6 ? "第二学期" : "第一学期"}`;
 }
-
-export const CONDUCT_DEDUCTION_PER_ABSENCE = ABSENCE_PER_HOUR_DEDUCTION;

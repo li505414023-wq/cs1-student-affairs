@@ -1,51 +1,19 @@
 /**
  * 为学生申请类模块补齐已部署的工作流模型（幂等）。
- * 背景：student-card / club-apply 提交记录时会按 modelKeyForFeature 启动流程，
- * 但线上 workflow_models 缺少对应模型，导致提交后静默停留"已提交"。
+ * 背景：学生提交申请时会按 modelKeyForFeature 启动流程，
+ * 若 workflow_models 缺少对应模型，提交会被拒绝（422）。
+ * 模型定义唯一来源：scripts/workflow-model-definitions.mjs。
  * Run: node --env-file=.env.local scripts/seed-workflow-models.mjs
  */
 import { randomUUID } from "node:crypto";
 import pg from "pg";
+import { REAL_WORKFLOW_MODELS } from "./workflow-model-definitions.mjs";
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
 if (!databaseUrl) throw new Error("缺少 DATABASE_URL");
 const pool = new pg.Pool({ connectionString: databaseUrl, max: 2 });
 
-const standardNodes = [
-  { id: "start", name: "开始", type: "start" },
-  { id: "submit", name: "申请人提交", type: "submit", assignee: "流程发起人" },
-  { id: "approve", name: "辅导员审批", type: "approval", assignee: "辅导员" },
-  { id: "end", name: "结束", type: "end" },
-];
-
-const models = [
-  {
-    modelKey: "student-card",
-    modelName: "学生证申请",
-    category: "学生事务",
-    description: "学生证申领/补办申请，辅导员审批。",
-    formKey: "form-card",
-    formName: "学生证申请表",
-    fields: [
-      { id: "c1", type: "下拉选择", label: "申请类型", required: true },
-      { id: "c2", type: "多行文本", label: "申请说明", required: true },
-    ],
-    nodes: standardNodes,
-  },
-  {
-    modelKey: "club-apply",
-    modelName: "社团申请",
-    category: "学生事务",
-    description: "社团加入/活动申请，辅导员审批。",
-    formKey: "form-club",
-    formName: "社团申请表",
-    fields: [
-      { id: "u1", type: "单行文本", label: "社团名称", required: true },
-      { id: "u2", type: "多行文本", label: "申请说明", required: true },
-    ],
-    nodes: standardNodes,
-  },
-];
+const models = REAL_WORKFLOW_MODELS;
 
 try {
   for (const model of models) {

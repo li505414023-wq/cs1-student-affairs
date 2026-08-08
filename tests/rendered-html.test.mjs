@@ -68,17 +68,12 @@ test("implements the complete four-section student form", async () => {
 });
 
 test("gives every business stage a real record form", async () => {
-  const source = (await Promise.all([
-    readFile(new URL("../app/components/forms/BusinessRecordForm.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/components/forms/BatchRecordForm.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/components/forms/ApplicationRecordForm.tsx", import.meta.url), "utf8"),
-  ])).join("\n");
+  const source = await readFile(new URL("../app/components/forms/BusinessRecordForm.tsx", import.meta.url), "utf8");
 
-  assert.match(source, /ConfigRecordForm/);
-  assert.match(source, /BatchRecordForm/);
-  assert.match(source, /ApplicationRecordForm/);
-  assert.match(source, /ReviewRecordForm/);
-  assert.match(source, /ArchiveRecordForm/);
+  assert.match(source, /stage === "config"/);
+  assert.match(source, /stage === "batch"/);
+  assert.match(source, /stage === "apply"/);
+  assert.match(source, /stage === "archive"/);
   assert.match(source, /审核意见/);
   assert.match(source, /申请开始时间/);
   assert.match(source, /附件材料/);
@@ -102,7 +97,11 @@ test("implements all four top-level systems and their menus", async () => {
 });
 
 test("defines page-specific fields across welcome, dormitory, and admin systems", async () => {
-  const metadata = await readFile(new URL("../app/feature-metadata.ts", import.meta.url), "utf8");
+  const [metadata, dataPermission, systemLog] = await Promise.all([
+    readFile(new URL("../app/feature-metadata.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/admin/DataPermissionModule.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/admin/SystemLogModule.tsx", import.meta.url), "utf8"),
+  ]);
 
   assert.match(metadata, /card-checkin/);
   assert.match(metadata, /报到状态/);
@@ -112,10 +111,9 @@ test("defines page-specific fields across welcome, dormitory, and admin systems"
   assert.match(metadata, /考勤状态/);
   assert.match(metadata, /dorm-repair/);
   assert.match(metadata, /维修状态/);
-  assert.match(metadata, /data-permission/);
-  assert.match(metadata, /数据范围/);
-  assert.match(metadata, /error-log/);
-  assert.match(metadata, /异常信息/);
+  // 后台权限与日志页走专用模块渲染，字段定义在模块自身而非 feature-metadata。
+  assert.match(dataPermission, /数据范围/);
+  assert.match(systemLog, /错误信息/);
 });
 
 test("parses and validates student import rows", () => {
@@ -202,9 +200,13 @@ test("routes every non-student import action through a real file import dialog",
 });
 
 test("gives every non-student feature an explicit page presentation", async () => {
-  const [dataSource, metadataSource] = await Promise.all([
+  const [dataSource, metadataSource, entitySource, registrySource, taskSource, domainSource] = await Promise.all([
     readFile(new URL("../app/system-data.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/feature-metadata.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/entity-features.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/module-registry.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/workflow/WorkflowTaskModule.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/domain-tabs.ts", import.meta.url), "utf8"),
   ]);
   const featureBlocks = [...dataSource.matchAll(/features:\s*\[(.*?)\]/gs)];
   const featureIds = featureBlocks.flatMap((block) =>
@@ -214,12 +216,21 @@ test("gives every non-student feature an explicit page presentation", async () =
     [...metadataSource.matchAll(/^\s{2}(?:"([^"]+)"|([A-Za-z][\w-]*)):\s*\{\s*variant:/gm)]
       .map((match) => match[1] || match[2]),
   );
-  // student-home and corps-admin are presented through dedicated modules
-  // (StudentHomeModule / admin modules) instead of feature-metadata variants.
-  const missing = featureIds.filter((id) => id !== "students" && id !== "student-home" && id !== "corps-admin" && !configuredIds.has(id));
+  // 与 module-registry.resolveModule 的专用渲染路径保持同步：
+  // EntityModule CRUD、registry 专用模块、流程待办页与域 Tab 页不需要 variant 配置。
+  const entityIds = [...entitySource.matchAll(/^\s{2}"([a-z-]+)":\s*\{/gm)].map((match) => match[1]);
+  const registryIds = [...registrySource.matchAll(/register\("([^"]+)"/g)].map((match) => match[1]);
+  const taskBlock = taskSource.match(/WORKFLOW_TASK_FEATURES = new Set\(\[(.*?)\]\)/s)?.[1] ?? "";
+  const workflowTaskIds = [...taskBlock.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  const domainIds = [...domainSource.matchAll(/^\s{2}"?([a-z-]+)"?:\s*\[/gm)].map((match) => match[1]);
+  const dedicatedIds = new Set([
+    "students", "student-home", "corps-admin",
+    ...entityIds, ...registryIds, ...workflowTaskIds, ...domainIds,
+  ]);
+  const missing = featureIds.filter((id) => !dedicatedIds.has(id) && !configuredIds.has(id));
 
   assert.deepEqual(missing, []);
-  assert.equal(featureIds.length, 148);
+  assert.equal(featureIds.length, 116);
 });
 
 test("matches the source student list filters, columns, and pagination controls", async () => {

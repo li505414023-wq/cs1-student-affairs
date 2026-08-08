@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { systemGroups, systems, type SystemId, type Feature, type FeatureGroup } from "../system-data";
-import { isAdminGroupVisible, isFeatureVisible, systemsForRole } from "../menu-policy";
+import { isAdminGroupVisible, isFeatureVisible, isStageVisible, systemsForRole } from "../menu-policy";
 import { useAuth } from "./AuthContext";
 
 interface NavigationContextValue {
@@ -47,7 +47,12 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
       .map((group) => ({
         ...group,
         children: group.children
-          .map((child) => ({ ...child, features: child.features.filter((feature) => isFeatureVisible(feature.id, currentRole)) }))
+          .map((child) => ({
+            ...child,
+            features: child.features.filter((feature) =>
+              isFeatureVisible(feature.id, currentRole)
+              && (activeSystem === "admin" || isStageVisible(currentRole, feature.stage))),
+          }))
           .filter((child) => child.features.length > 0),
       }))
       .filter((group) => group.children.length > 0);

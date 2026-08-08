@@ -7,6 +7,7 @@ import type { CurrentSession } from "@/lib/auth";
 import { hasPermission } from "@/lib/security";
 import { isStudentApplyFeature } from "@/lib/feature-policy";
 import { recordScopeConditions } from "@/lib/records-scope";
+import { canWriteFeatureStage } from "@/app/menu-policy";
 import { TERMINAL_WORKFLOW_STATUSES } from "@/lib/workflow/types";
 import { ApiError, fail, ok, readJson, requestIp, writeAudit } from "@/lib/api";
 import { validateRecordInput } from "@/lib/validation";
@@ -31,6 +32,10 @@ async function requireWriteSession(request: NextRequest, featureId: string) {
   }
   if (!studentApply && !(await hasPermission(session.user.role, "write"))) {
     throw new ApiError(403, "当前账号没有此操作权限");
+  }
+  // 与创建接口一致：业务系统 config/batch 记录仅 admin 可修改/删除。
+  if (!canWriteFeatureStage(featureId, session.user.role)) {
+    throw new ApiError(403, "配置与批次数据仅管理员可维护");
   }
   validateCsrf(request, session);
   return session;

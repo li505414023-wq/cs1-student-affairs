@@ -3,7 +3,7 @@ import {
   absencePunishment,
   absenceWarningLevel,
   APPEAL_DEADLINE_DAYS,
-  appealReviewDaysGuard,
+  APPEAL_REVIEW_DAYS,
   comprehensiveEval,
   CONDUCT_BASE_SCORE,
   isAppealInDeadline,
@@ -74,7 +74,7 @@ describe("申诉时限(申诉处理办法)", () => {
     expect(isAppealInDeadline("2026-07-01", "2026-07-12")).toBe(false);
     expect(isAppealInDeadline("2026-07-01", "2026-06-30")).toBe(false);
     expect(isAppealInDeadline("无效日期", "2026-07-05")).toBe(false);
-    expect(appealReviewDaysGuard()).toBe(15);
+    expect(APPEAL_REVIEW_DAYS).toBe(15);
   });
 });
 

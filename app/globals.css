@@ -702,7 +702,7 @@ label:has(> [aria-invalid="true"]) > span:first-child { color: var(--color-error
   background: var(--color-border-hover);
 }
 
-.flow-card li span, .stage-line span {
+.flow-card li span {
   display: grid;
   place-items: center;
   width: 26px;
@@ -1001,6 +1001,29 @@ td strong { color: var(--color-text-primary); font-weight: var(--font-weight-med
   padding: var(--space-18) 0;
   border-bottom: 1px solid var(--color-border);
 }
+/* 域页面/工作台页内 Tab（一个入口承载同域子功能） */
+.domain-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  margin: 0 0 var(--space-14);
+}
+.domain-tabs button {
+  padding: 6px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+  cursor: pointer;
+}
+.domain-tabs button:hover { border-color: var(--color-border-hover); color: var(--color-text-primary); }
+.domain-tabs button.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
 .filter-toggle-row {
   display: flex;
   justify-content: flex-end;
@@ -1011,37 +1034,6 @@ td strong { color: var(--color-text-primary); font-weight: var(--font-weight-med
 /* ============================================
    Stage Line (Workflow Progress)
    ============================================ */
-
-.stage-line {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  margin: var(--space-28) 0;
-}
-
-.stage-line div {
-  position: relative;
-  display: grid;
-  justify-items: center;
-  gap: var(--space-6);
-  color: var(--color-text-tertiary);
-  font-size: var(--text-caption);
-}
-.stage-line div:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  left: 58%;
-  right: -42%;
-  top: 13px;
-  height: 1px;
-  background: var(--color-border-hover);
-}
-
-.stage-line span { z-index: 1; background: var(--color-bg-tertiary); color: var(--color-text-tertiary); }
-.stage-line .done { color: var(--color-accent); }
-.stage-line .done span { background: var(--color-accent); color: #fff; }
-.stage-line .done::after { background: var(--color-accent-subtle) !important; }
-.stage-line p { margin: 0; }
 
 /* ============================================
    Statistics

@@ -46,3 +46,6 @@ next-env.d.ts
 # npm debug logs
 /.npm/
 patrol-*.png
+
+# local agent settings
+.claude/settings.local.json

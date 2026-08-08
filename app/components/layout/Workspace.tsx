@@ -104,6 +104,9 @@ export function Workspace(props: WorkspaceProps) {
     case "entity":
       moduleProps = { key: activeFeature, featureId: activeFeature, csrfToken };
       break;
+    case "domain":
+      moduleProps = { key: activeFeature, featureId: activeFeature, feature: active?.label ?? "业务域", csrfToken, currentUser };
+      break;
     case "admin-csrf":
       moduleProps = { csrfToken };
       break;
@@ -112,9 +115,6 @@ export function Workspace(props: WorkspaceProps) {
       break;
     case "log":
       moduleProps = { feature: resolved.logLabel ?? active?.label ?? "日志" };
-      break;
-    case "shell":
-      moduleProps = { key: activeFeature, featureId: activeFeature, feature: active?.label ?? "功能模块", description: "该功能尚未开放，敬请期待。", stage: active?.stage, csrfToken, currentUser };
       break;
     default: // "generic"
       moduleProps = {

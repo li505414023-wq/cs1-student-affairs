@@ -4,12 +4,12 @@ import type { Dispatch, SetStateAction } from "react";
 import { ModelPage } from "./components/workflow/ModelPage";
 import { FormPage } from "./components/workflow/FormPage";
 import { DeploymentPage } from "./components/workflow/DeploymentPage";
-import { WorkflowSettingsPage } from "./components/workflow/WorkflowSettingsPage";
 import type { WorkflowModel, WorkflowForm, WorkflowDeployment } from "./components/workflow/workflow-types";
 
 export type { WorkflowNode, WorkflowModel, WorkflowField, WorkflowForm, WorkflowDeployment } from "./components/workflow/workflow-types";
 
-const workflowDesignIds = new Set(["model-design", "form-design", "deployment", "flow-button", "flow-category", "form-default", "flow-expression"]);
+// flow-button/flow-category/form-default/flow-expression 走 EntityModule 真实 CRUD（managed_items 持久化）。
+const workflowDesignIds = new Set(["model-design", "form-design", "deployment"]);
 
 export function isWorkflowDesignFeature(featureId: string) { return workflowDesignIds.has(featureId); }
 
@@ -60,6 +60,5 @@ type Props = {
 export default function WorkflowDesignModule(props: Props) {
   if (props.featureId === "model-design") return <ModelPage {...props} />;
   if (props.featureId === "form-design") return <FormPage {...props} />;
-  if (props.featureId === "deployment") return <DeploymentPage {...props} />;
-  return <WorkflowSettingsPage featureId={props.featureId} />;
+  return <DeploymentPage {...props} />;
 }

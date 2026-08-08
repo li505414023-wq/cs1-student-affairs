@@ -6,10 +6,10 @@ import { createTestDataset, extractFeatureIds } from "../lib/test-data-generator
 const systemDataSource = await readFile(new URL("../app/system-data.ts", import.meta.url), "utf8");
 const featureIds = extractFeatureIds(systemDataSource);
 
-test("extracts every feature entry from all four systems", () => {
-  assert.equal(featureIds.length, 146);
-  assert.equal(new Set(featureIds).size, 146);
-  for (const expected of ["students", "leave", "card-checkin", "dorm-repair", "deployment", "error-log"]) {
+test("extracts every feature entry from all five systems", () => {
+  assert.equal(featureIds.length, 116);
+  assert.equal(new Set(featureIds).size, 116);
+  for (const expected of ["students", "leave", "card-checkin", "dorm-repair", "morning-exercise", "deployment", "error-log"]) {
     assert.ok(featureIds.includes(expected));
   }
 });
@@ -47,4 +47,3 @@ test("rejects unsafe generation sizes and empty feature lists", () => {
   assert.throws(() => createTestDataset({ seed: "x", featureIds, studentCount: 0, recordsPerFeature: 2 }), /学生/);
   assert.throws(() => createTestDataset({ seed: "x", featureIds, studentCount: 10, recordsPerFeature: 1001 }), /记录/);
 });
-

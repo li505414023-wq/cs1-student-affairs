@@ -4,7 +4,7 @@ import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import { isEntityFeature } from "@/lib/entity-features";
 import { isWorkflowDesignFeature } from "./WorkflowDesignModule";
 import { isWorkflowTaskFeature } from "./components/workflow/WorkflowTaskModule";
-import { isShellFeature } from "./menu-policy";
+import { isDomainFeature } from "./domain-tabs";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyComponent = ComponentType<any>;
@@ -21,10 +21,11 @@ const LazyOpsScheduleModule = lazy(() => import("./components/admin/OpsScheduleM
 const LazySystemLogModule = lazy(() => import("./components/admin/SystemLogModule").then((m) => ({ default: m.SystemLogModule })));
 const LazyAuditLogModule = lazy(() => import("./components/admin/AuditLogModule").then((m) => ({ default: m.AuditLogModule })));
 const LazyGenericModule = lazy(() => import("./components/generic/GenericModule").then((m) => ({ default: m.GenericModule })));
+const LazyTabbedDomainModule = lazy(() => import("./components/generic/TabbedDomainModule").then((m) => ({ default: m.TabbedDomainModule })));
 const LazyComprehensiveEvalModule = lazy(() => import("./components/police/ComprehensiveEvalModule").then((m) => ({ default: m.ComprehensiveEvalModule })));
 
 /** Module category determines which props the Workspace should pass. */
-export type ModuleCategory = "entity" | "admin-csrf" | "admin-plain" | "log" | "generic" | "shell";
+export type ModuleCategory = "entity" | "admin-csrf" | "admin-plain" | "log" | "domain" | "generic";
 
 interface RegistryEntry {
   component: LazyExoticComponent<AnyComponent>;
@@ -67,8 +68,8 @@ export interface ResolvedModule {
 /**
  * Resolve a featureId to its module. Priority:
  * 1. Exact registry match
- * 2. Entity features (17 engine-backed CRUD modules)
- * 3. Shell features (placeholder)
+ * 2. Domain features (页内 Tab 合并同域子功能，见 app/domain-tabs.ts)
+ * 3. Entity features (17 engine-backed CRUD modules)
  * 4. GenericModule fallback
  */
 export function resolveModule(featureId: string): ResolvedModule {
@@ -76,14 +77,14 @@ export function resolveModule(featureId: string): ResolvedModule {
   const entry = registry.get(featureId);
   if (entry) return entry;
 
+  // Domain features
+  if (isDomainFeature(featureId)) {
+    return { component: LazyTabbedDomainModule, category: "domain" };
+  }
+
   // Entity features
   if (isEntityFeature(featureId)) {
     return { component: LazyEntityModule, category: "entity" };
-  }
-
-  // Shell features (not yet implemented)
-  if (isShellFeature(featureId)) {
-    return { component: LazyGenericModule, category: "shell" };
   }
 
   // Fallback: GenericModule handles all record-based features

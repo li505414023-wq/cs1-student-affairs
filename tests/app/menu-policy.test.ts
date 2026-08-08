@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canManageStudents, isAdminGroupVisible, isFeatureVisible, isShellFeature, systemsForRole, STUDENT_VISIBLE_FEATURES } from "@/app/menu-policy";
+import { canManageStudents, isAdminGroupVisible, isFeatureVisible, isStageVisible, systemsForRole, STUDENT_VISIBLE_FEATURES } from "@/app/menu-policy";
 import { STUDENT_APPLY_FEATURES, STUDENT_READ_ONLY_FEATURES } from "@/lib/feature-policy";
 
 describe("menu policy", () => {
@@ -60,11 +60,16 @@ describe("menu policy", () => {
     expect(canManageStudents("viewer")).toBe(false);
   });
 
-  it("no shelved features remain after batches 1-4", () => {
-    for (const featureId of ["role-admin", "data-permission", "api-permission", "user-admin",
-      "system-dict", "faculty-admin", "ops-schedule", "team-building", "headteacher-query",
-      "api-log", "error-log", "usual-log", "leave"]) {
-      expect(isShellFeature(featureId), featureId).toBe(false);
-    }
+  it("hides config/batch stage features from non-admin roles in business systems", () => {
+    // 辅导员/宿管的日常是审批与登记，不应面对成片的"种类/批次设置"。
+    expect(isStageVisible("admin", "config")).toBe(true);
+    expect(isStageVisible("admin", "batch")).toBe(true);
+    expect(isStageVisible("counselor", "config")).toBe(false);
+    expect(isStageVisible("counselor", "batch")).toBe(false);
+    expect(isStageVisible("dorm_manager", "config")).toBe(false);
+    expect(isStageVisible("counselor", "review")).toBe(true);
+    expect(isStageVisible("counselor", "apply")).toBe(true);
+    expect(isStageVisible("counselor", undefined)).toBe(true);
+    expect(isStageVisible("student", "apply")).toBe(true);
   });
 });

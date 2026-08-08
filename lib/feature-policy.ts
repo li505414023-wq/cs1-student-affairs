@@ -22,17 +22,18 @@ export const STUDENT_APPLY_FEATURES: ReadonlySet<string> = new Set([
 /**
  * Maps an apply feature to the workflow model key that should be started
  * when a student submits it. Features absent from this map (and without a
- * model matching their own id) are stored as plain records without a flow.
+ * model matching their own id) are rejected with 422 at submit time —
+ * 申请类业务必须有流程，静默落库会造成"已提交但无人审批"。
+ * 模型定义见 scripts/workflow-model-definitions.mjs。
  */
 export const FEATURE_MODEL_MAP: Readonly<Record<string, string>> = {
   leave: "leave",
-  grants: "grants",
-  // 宿舍类申请统一走已部署的住宿申办流程（模型 key 必须与 workflow_models 一致）。
-  "dorm-checkin": "dorm-checkin",
-  "dorm-transfer": "dorm-checkin",
-  "dorm-checkout": "dorm-checkin",
-  "holiday-dorm": "dorm-checkin",
-  "delayed-checkout": "dorm-checkin",
+  // 宿舍类申请统一走已部署的住宿申办流程（设计器与种子脚本中的模型 key 为 declare）。
+  "dorm-checkin": "declare",
+  "dorm-transfer": "declare",
+  "dorm-checkout": "declare",
+  "holiday-dorm": "declare",
+  "delayed-checkout": "declare",
 };
 
 /**

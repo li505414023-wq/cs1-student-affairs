@@ -5,6 +5,7 @@ import pg from "pg";
 import { hashPassword } from "../lib/security.js";
 import { createTestDataset, extractFeatureIds } from "../lib/test-data-generator.js";
 import { seedOrgHierarchy } from "./seed-org-hierarchy.mjs";
+import { REAL_WORKFLOW_MODELS } from "./workflow-model-definitions.mjs";
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
 if (!databaseUrl) throw new Error("缺少 DATABASE_URL");
@@ -17,9 +18,38 @@ if (!testPassword || testPassword.length < 12) throw new Error("TEST_USER_PASSWO
 
 const source = await readFile(resolve(process.cwd(), "app/system-data.ts"), "utf8");
 const featureIds = extractFeatureIds(source);
-if (featureIds.length !== 127) throw new Error(`功能入口数量异常：预期 127，实际 ${featureIds.length}`);
+if (featureIds.length !== 116) throw new Error(`功能入口数量异常：预期 116，实际 ${featureIds.length}`);
 
-const dataset = createTestDataset({ seed, featureIds, studentCount, recordsPerFeature });
+// 菜单减负后收进域页面 Tab 的子功能（与 app/domain-tabs.ts 保持同步）：
+// 导航不再平铺，但仍是独立的 records featureId，需要生成演示数据。
+const domainSubFeatures = [
+  "scholarship-type", "scholarship-batch", "scholarship-mutex",
+  "grant-type", "grant-batch", "grant-mutex",
+  "hardship-type", "hardship-batch",
+  "honor-type", "honor-batch", "personal-honor", "collective-honor",
+  "dorm-transfer", "dorm-checkout", "holiday-dorm", "delayed-checkout",
+  "faculty-checkin-stats", "class-checkin-stats", "live-checkin-stats",
+  "supplies-stats", "transport-stats", "payment-stats", "step-stats", "nation-stats", "welcome-dorm-stats",
+];
+
+const dataset = createTestDataset({ seed, featureIds: [...new Set([...featureIds, ...domainSubFeatures])], studentCount, recordsPerFeature });
+
+// 真实学生申请流程（与 seed-workflow-models.mjs 同源）：保证演示环境能真正发起请假/住宿等申请。
+for (const model of REAL_WORKFLOW_MODELS) {
+  if (!dataset.workflowForms.some((form) => form.key === model.formKey)) {
+    dataset.workflowForms.push({ id: `real-${model.formKey}`, key: model.formKey, name: model.formName, type: "内置表单", status: "启用", fields: model.fields });
+  }
+  if (!dataset.workflowModels.some((existing) => existing.key === model.modelKey)) {
+    dataset.workflowModels.push({
+      id: `real-model-${model.modelKey}`, key: model.modelKey, name: model.modelName, category: model.category,
+      description: model.description, formId: `real-${model.formKey}`, version: 1, status: "已部署", nodes: model.nodes,
+    });
+    dataset.workflowDeployments.push({
+      id: `real-deploy-${model.modelKey}`, modelKey: model.modelKey, modelName: model.modelName, category: model.category,
+      version: 1, status: "激活", deployedAt: new Date(Date.UTC(2026, 6, 19)).toISOString(),
+    });
+  }
+}
 const userPasswordHashes = await Promise.all(dataset.users.map(() => hashPassword(testPassword)));
 const pool = new pg.Pool({ connectionString: databaseUrl, max: 2 });
 const client = await pool.connect();

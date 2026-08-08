@@ -509,15 +509,11 @@ export class WorkflowEngine {
         ? evaluate(conditionExpr, { formData: instance?.formDataJson as Record<string, unknown> ?? {}, user: { id: instance?.startedBy ?? "", role: "" } })
         : true;
 
-      if (shouldBranch) {
-        // Skip condition node, go to next after it
-        const afterCondition = nodes[currentIndex + 2];
-        await this.activateNextNode(instanceId, afterCondition);
-      } else {
-        // Follow default/else path — for now, skip past condition
-        const afterCondition = nodes[currentIndex + 2];
-        await this.activateNextNode(instanceId, afterCondition);
-      }
+      // The linear engine has no alternate branch yet, so both outcomes
+      // advance past the condition node; log the result for the audit trail.
+      await this.logEvent(instanceId, nextNode.id as string, "condition_evaluated", String(shouldBranch));
+      const afterCondition = nodes[currentIndex + 2];
+      await this.activateNextNode(instanceId, afterCondition);
       return;
     }
 

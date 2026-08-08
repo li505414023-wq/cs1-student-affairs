@@ -4,6 +4,7 @@ import { getDb } from "@/db";
 import type { getDb as getDbType } from "@/db";
 import { businessRecords } from "@/db/schema";
 import { requirePermission, validateCsrf } from "@/lib/auth";
+import { canWriteFeatureStage } from "@/app/menu-policy";
 import { ApiError, fail, ok, readJson, requestIp, writeAudit, writeSystemLog } from "@/lib/api";
 import { validateRecordInput } from "@/lib/validation";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -32,6 +33,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ fe
     enforceRateLimit(`batch:${session.user.id}`, 5, 60_000);
     const { featureId: raw } = await context.params;
     const featureId = validFeatureId(raw);
+    if (!canWriteFeatureStage(featureId, session.user.role)) {
+      throw new ApiError(403, "配置与批次数据仅管理员可维护");
+    }
     const body = await readJson(request);
     const rows = Array.isArray(body?.records) ? body.records : [];
 

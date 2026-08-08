@@ -11,7 +11,7 @@ export type TaskResult = "同意" | "退回" | "拒绝";
 
 export interface WorkflowNode {
   id: string;
-  type: "start" | "end" | "approval" | "copy" | "condition" | "parallel" | "exclusive" | "submit";
+  type: "start" | "end" | "approval" | "copy" | "condition" | "submit";
   name: string;
   assignee?: string;
   assigneeType?: "user" | "role" | "creator" | "variable";
@@ -19,17 +19,6 @@ export interface WorkflowNode {
   formId?: string;
   conditionExpression?: string;
   dueHours?: number;
-  multiInstance?: "sequential" | "parallel";
-  requiredVotes?: number;
-}
-
-export interface WorkflowEdge {
-  id: string;
-  source: string;
-  target: string;
-  condition?: string;
-  priority?: number;
-  default?: boolean;
 }
 
 export interface WorkflowModel {
@@ -42,7 +31,6 @@ export interface WorkflowModel {
   version: number;
   status: string;
   nodes: WorkflowNode[];
-  edges?: WorkflowEdge[];
 }
 
 export interface AdvanceInput {

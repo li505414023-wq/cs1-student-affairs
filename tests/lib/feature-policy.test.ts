@@ -13,7 +13,7 @@ describe("feature policy", () => {
 
   it("maps apply features to workflow model keys", () => {
     expect(modelKeyForFeature("leave")).toBe("leave");
-    expect(modelKeyForFeature("dorm-transfer")).toBe("dorm-checkin");
+    expect(modelKeyForFeature("dorm-transfer")).toBe("declare");
     expect(modelKeyForFeature("grants")).toBe("grants");
     // Features without an explicit mapping fall back to their own id
     expect(modelKeyForFeature("student-card")).toBe("student-card");

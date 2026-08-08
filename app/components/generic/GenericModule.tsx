@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { workflow } from "@/app/system-data";
 import { getPresentation, filterOptionsFor } from "@/app/feature-metadata";
 import { filterTableRows } from "@/app/interaction-utils.js";
 import { downloadCsv } from "@/app/components/shared/download-csv";
@@ -40,7 +39,6 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
   const [selectedRow, setSelectedRow] = useState<Record<string, string | number> | null>(null);
   const [stats, setStats] = useState<{ total: number; byStatus: Array<{ status: string; count: number }>; sums: Record<string, number> } | null>(null);
   const RECORDS_PAGE_SIZE = 20;
-  const stageIndex = Math.max(0, ["config", "batch", "apply", "review", "archive"].indexOf(stage ?? "review"));
   const presentation = getPresentation(featureId, stage);
   const primaryAction = presentation.primaryAction;
   const columns = visibleColumns.length ? visibleColumns : presentation.columns;
@@ -210,12 +208,6 @@ export function GenericModule({ featureId, feature, description, stage, csrfToke
           </button>
         )}
       </div>
-
-      {presentation.variant === "workflow" && (
-        <div className="stage-line">
-          {workflow.map((step, index) => <div className={index <= stageIndex ? "done" : ""} key={step}><span>{index + 1}</span><p>{step}</p></div>)}
-        </div>
-      )}
 
       <div className="filter-toggle-row">
         <button className="ghost" type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((v) => !v)}>

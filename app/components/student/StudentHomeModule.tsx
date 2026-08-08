@@ -13,13 +13,13 @@ type TaskSummary = { id: string; instanceTitle: string; instanceStatus: string; 
 const STUDENT_ACTIONS: Array<{ label: string; featureId: string; description: string }> = [
   { label: "发起请假", featureId: "leave", description: "事假、病假、公假在线申请" },
   { label: "学生证补办", featureId: "student-card", description: "遗失补办、损坏换发" },
+  { label: "住宿申办", featureId: "dorm-checkin", description: "入住、调宿、退宿、假期留宿申请" },
   { label: "处分申诉", featureId: "appeal", description: "接到处分决定书后提交申诉" },
   { label: "我的档案", featureId: "students", description: "查看个人学籍信息" },
 ];
 
 const STAFF_ACTIONS: Array<{ label: string; featureId: string; description: string }> = [
   { label: "待办审批", featureId: "todo", description: "处理等待我审批的申请" },
-  { label: "待签事务", featureId: "claim", description: "认领可审批的流程" },
   { label: "学生管理", featureId: "students", description: "查看所带范围内的学生" },
   { label: "操行分登记", featureId: "conduct-score", description: "警务化操行分登记" },
 ];

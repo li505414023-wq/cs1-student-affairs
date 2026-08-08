@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { seedOrgHierarchy } from "./seed-org-hierarchy.mjs";
+import { LEAVE_TYPES } from "../lib/dictionaries.js";
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
 if (!databaseUrl) throw new Error("缺少 DATABASE_URL");
@@ -44,7 +45,7 @@ try {
 
   // ---- 业务字典 ----
   await put("business-dict", "LEAVE_TYPE", "请假类型", { sort: 1 });
-  for (const [index, value] of ["事假", "病假", "公假"].entries()) {
+  for (const [index, value] of LEAVE_TYPES.entries()) {
     await put("business-dict", `LEAVE_TYPE_${index + 1}`, value, { parentCode: "LEAVE_TYPE", sort: index + 1, data: { value } });
   }
 

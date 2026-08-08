@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, apiErrorMessage, isNetworkError } from "@/lib/api-client";
 
-const WORKFLOW_TASK_FEATURES = new Set(["todo", "claim", "my-request", "my-done", "finished", "copied", "new-flow"]);
+// 审批工作台 7 合 3：待办事宜(含待签 Tab) / 我的请求 / 已办结(含办结归档 Tab)。
+const WORKFLOW_TASK_FEATURES = new Set(["todo", "my-request", "done", "new-flow"]);
 
 export function isWorkflowTaskFeature(featureId: string) {
   return WORKFLOW_TASK_FEATURES.has(featureId);
@@ -75,9 +76,13 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [startForm, setStartForm] = useState<{ deployment: Deployment; fields: Array<{ label: string; type: string; required: boolean }> } | null>(null);
+  // 页内视图切换：待办事宜 = 待办/待签；已办结 = 我的已办/办结归档。
+  const [taskView, setTaskView] = useState<"todo" | "claim">("todo");
+  const [doneView, setDoneView] = useState<"done" | "finished">("done");
 
-  const usesTasks = featureId === "todo" || featureId === "claim" || featureId === "my-done";
-  const usesInstances = featureId === "my-request" || featureId === "finished";
+  const taskType = featureId === "todo" ? taskView : featureId === "done" ? doneView : null;
+  const usesTasks = taskType === "todo" || taskType === "claim" || taskType === "done";
+  const usesInstances = featureId === "my-request" || taskType === "finished";
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -85,12 +90,11 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
     try {
       if (usesTasks) {
         failureMessage = "待办数据加载失败，请重试";
-        const type = featureId === "todo" ? "todo" : featureId === "claim" ? "claim" : "done";
-        const data = await api.get<{ tasks: TaskItem[] }>(`/api/workflow/tasks?type=${type}`);
+        const data = await api.get<{ tasks: TaskItem[] }>(`/api/workflow/tasks?type=${taskType}`);
         setTasks(data.tasks);
       } else if (usesInstances) {
         failureMessage = "流程数据加载失败，请重试";
-        const query = featureId === "finished" ? "?status=已完成&pageSize=50" : "?pageSize=50";
+        const query = taskType === "finished" ? "?status=已完成&pageSize=50" : "?pageSize=50";
         const data = await api.get<{ items: InstanceItem[] }>(`/api/workflow/instances${query}`);
         setInstances(data.items);
       } else if (featureId === "new-flow") {
@@ -103,7 +107,7 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
     } finally {
       setIsLoading(false);
     }
-  }, [featureId, usesTasks, usesInstances]);
+  }, [featureId, taskType, usesTasks, usesInstances]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -216,16 +220,26 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
         <span className="module-mark">{feature.slice(0, 1)}</span>
         <div>
           <h2>{feature}</h2>
-          <p>{featureId === "todo" && "分配给您且已就绪的审批任务，点击「处理」查看申请详情并给出审批意见。"}
-            {featureId === "claim" && "按角色分派的公共任务，签收后进入您的待办事宜。"}
+          <p>{featureId === "todo" && "分配给您且已就绪的审批任务；「待签」页签是按角色分派的公共任务，签收后进入您的待办。"}
             {featureId === "my-request" && "您发起的全部流程实例及当前状态，运行中的流程可以撤回，退回待修改的流程可以重新提交。"}
-            {featureId === "my-done" && "您已经处理完成的任务记录。"}
-            {featureId === "finished" && "已办结的流程实例归档。"}
-            {featureId === "copied" && "抄送事宜功能将在后续版本开放。"}
+            {featureId === "done" && "您已经处理完成的任务记录；「办结归档」页签是全部已办结的流程实例。"}
             {featureId === "new-flow" && "选择已部署的流程模型，填写表单后发起新的审批流程。"}</p>
         </div>
         <button className="ghost" onClick={() => void load()}>刷新</button>
       </div>
+
+      {featureId === "todo" && (
+        <div className="domain-tabs" role="tablist" aria-label="待办视图切换">
+          <button role="tab" aria-selected={taskView === "todo"} className={taskView === "todo" ? "active" : ""} onClick={() => setTaskView("todo")}>待办</button>
+          <button role="tab" aria-selected={taskView === "claim"} className={taskView === "claim" ? "active" : ""} onClick={() => setTaskView("claim")}>待签</button>
+        </div>
+      )}
+      {featureId === "done" && (
+        <div className="domain-tabs" role="tablist" aria-label="已办结视图切换">
+          <button role="tab" aria-selected={doneView === "done"} className={doneView === "done" ? "active" : ""} onClick={() => setDoneView("done")}>我的已办</button>
+          <button role="tab" aria-selected={doneView === "finished"} className={doneView === "finished" ? "active" : ""} onClick={() => setDoneView("finished")}>办结归档</button>
+        </div>
+      )}
 
       {isLoading ? <p style={{ padding: "16px" }}>加载中…</p> : (
         <>
@@ -243,9 +257,9 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
                       <td>{task.status ?? "—"}</td>
                       <td>{formatTime(task.createdAt)}</td>
                       <td style={{ display: "flex", gap: 8 }}>
-                        {featureId === "claim"
+                        {taskType === "claim"
                           ? <button className="primary" disabled={busy} onClick={() => void claimTask(task)}>签收</button>
-                          : <button className="primary" onClick={() => void openInstance(task.instanceId, featureId === "todo" ? task : null)}>查看详情</button>}
+                          : <button className="primary" onClick={() => void openInstance(task.instanceId, taskType === "todo" ? task : null)}>查看详情</button>}
                       </td>
                     </tr>
                   ))}
@@ -282,8 +296,6 @@ export function WorkflowTaskModule({ featureId, feature, csrfToken, currentUser,
               </table>
             </div>
           )}
-
-          {featureId === "copied" && <p style={{ padding: "24px", textAlign: "center" }}>抄送事宜功能将在后续版本开放，敬请期待。</p>}
 
           {featureId === "new-flow" && (
             <div className="table-scroll">
