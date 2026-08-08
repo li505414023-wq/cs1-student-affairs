@@ -109,6 +109,14 @@ npm start -- -p 4173
 - `deploy/nginx.conf` / `deploy/nginx-http-bootstrap.conf`：HTTPS 终结与反向代理配置（含 certbot 自动续期定时任务 `deploy/certbot-renew.*`）。
 - `deploy/cs1.service`：systemd 服务单元，以 `npm start` 运行生产构建，密钥与数据库连接经 `EnvironmentFile=/etc/cs1.env` 注入，并带沙箱加固项。
 - `deploy/setup-postgres.sh` / `deploy/prepare-production-postgres.sh`：生产 PostgreSQL 初始化脚本。
-- `scripts/deploy.sh`：代码同步与上线脚本（同步时排除 `.env.local`，避免覆盖服务器配置）。
+- `scripts/deploy.sh`：服务器端上线流水线（数据库备份→测试→构建→迁移→重启→健康检查），在服务器上以 root 运行。
+- `scripts/release.sh`：一键发布脚本，本地执行：推送 GitHub → 服务器 fast-forward 同步 `main` → 部署流水线 → 公网健康检查。
 
-本地开发仍以 `npm run dev` 为准；生产链路的域名、HTTPS 与备份均在服务器上由上述配置管理。
+一键发布：
+
+```bash
+bash scripts/release.sh                # 要求工作区已提交
+bash scripts/release.sh -m "提交信息"   # 有未提交改动时自动 commit
+```
+
+服务器（`cs-server`）的 `/opt/cs1` 跟随 GitHub `main` 分支；`.env.local` 与 `/etc/cs1.env` 不受同步影响。本地开发仍以 `npm run dev` 为准；生产链路的域名、HTTPS 与备份均在服务器上由上述配置管理。
