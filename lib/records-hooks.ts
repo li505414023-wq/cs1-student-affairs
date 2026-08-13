@@ -1,7 +1,16 @@
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, lt, ne, notIlike } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { getDb } from "@/db";
-import { businessRecords, managedItems, students } from "@/db/schema";
+import {
+  absenceWarnings,
+  attendances,
+  conductScores,
+  courseScores,
+  managedItems,
+  physicalTests,
+  punishments,
+  students,
+} from "@/db/schema";
 import { STATUS_CHANGE_TYPES } from "@/lib/dictionaries.js";
 import {
   absencePunishment,
@@ -121,39 +130,26 @@ export async function validateRecordAgainstDb(featureId: string, data: Record<st
   if (!HONOR_APPLY_FEATURES.includes(featureId)) return null;
   const no = str(data["学号"]);
   if (!no) return null;
-  const punishments = await db.select({ dataJson: businessRecords.dataJson, status: businessRecords.status })
-    .from(businessRecords).where(eq(businessRecords.featureId, "punishment"));
-  const activePunishment = punishments.find((row) => {
-    const d = row.dataJson as Record<string, unknown>;
-    return str(d["学号"]) === no && !str(row.status).includes("解除") && !str(row.status).includes("撤销");
-  });
-  if (activePunishment) return "该学生存在生效中的处分记录,按手册规定不得参加评优评奖";
+  // 生效中处分：按学号索引查询（此前为全表 JSONB 扫描 + 内存过滤）。
+  const activePunishment = await db.select({ id: punishments.id })
+    .from(punishments)
+    .where(and(eq(punishments.studentNo, no), notIlike(punishments.status, "%解除%"), notIlike(punishments.status, "%撤销%")))
+    .limit(1);
+  if (activePunishment.length > 0) return "该学生存在生效中的处分记录,按手册规定不得参加评优评奖";
   // 综合素质一票否决线:操行<65 / 单科<60 / 体测不合格。
-  const conductRows = await db.select({ dataJson: businessRecords.dataJson })
-    .from(businessRecords).where(eq(businessRecords.featureId, "conduct-score"));
+  const conductRows = await db.select({ direction: conductScores.direction, score: conductScores.score })
+    .from(conductScores).where(eq(conductScores.studentNo, no));
   let conduct = CONDUCT_BASE_SCORE;
   for (const row of conductRows) {
-    const d = row.dataJson as Record<string, unknown>;
-    if (str(d["学号"]) !== no) continue;
-    const value = Number(str(d["分值"])) || 0;
-    conduct += str(d["加减分"]) === "扣分" ? -value : value;
+    conduct += row.direction === "扣分" ? -row.score : row.score;
   }
   if (conduct < CONDUCT_VETO_LINE) return `该学生操行分${conduct}低于${CONDUCT_VETO_LINE}分,综合素质考核一票否决,不得评优`;
-  const scoreRows = await db.select({ dataJson: businessRecords.dataJson })
-    .from(businessRecords).where(eq(businessRecords.featureId, "course-scores"));
-  const failedCourse = scoreRows.find((row) => {
-    const d = row.dataJson as Record<string, unknown>;
-    const score = Number(str(d["课程成绩"]));
-    return str(d["学号"]) === no && Number.isFinite(score) && score < COURSE_VETO_LINE;
-  });
-  if (failedCourse) return "该学生存在单科成绩低于60分,综合素质考核一票否决,不得评优";
-  const physicalRows = await db.select({ dataJson: businessRecords.dataJson })
-    .from(businessRecords).where(eq(businessRecords.featureId, "physical-test"));
-  const failedTest = physicalRows.find((row) => {
-    const d = row.dataJson as Record<string, unknown>;
-    return str(d["学号"]) === no && str(d["成绩评定"]) === "不合格";
-  });
-  if (failedTest) return "该学生体测存在不合格项,综合素质考核一票否决,不得评优";
+  const failedCourse = await db.select({ id: courseScores.id })
+    .from(courseScores).where(and(eq(courseScores.studentNo, no), lt(courseScores.score, COURSE_VETO_LINE))).limit(1);
+  if (failedCourse.length > 0) return "该学生存在单科成绩低于60分,综合素质考核一票否决,不得评优";
+  const failedTest = await db.select({ id: physicalTests.id })
+    .from(physicalTests).where(and(eq(physicalTests.studentNo, no), eq(physicalTests.result, "不合格"))).limit(1);
+  if (failedTest.length > 0) return "该学生体测存在不合格项,综合素质考核一票否决,不得评优";
   return null;
 }
 
@@ -208,11 +204,17 @@ export async function afterRecordCreated(featureId: string, data: RecordData, db
 }
 
 async function insertConductRecord(db: Db, createdBy: string, fields: Record<string, string>): Promise<void> {
-  await db.insert(businessRecords).values({
+  const dataJson = { ...fields, 记录日期: today(), 记录人: "系统联动" };
+  await db.insert(conductScores).values({
     id: randomUUID(),
-    featureId: "conduct-score",
-    dataJson: { ...fields, 记录日期: today(), 记录人: "系统联动" },
-    status: "已提交",
+    studentNo: fields["学号"] ?? "",
+    studentName: fields["姓名"] ?? "",
+    className: fields["区队"] ?? "",
+    direction: fields["加减分"] ?? "加分",
+    score: Number(fields["分值"]) || 0,
+    reason: fields["事由"] ?? "",
+    recordDate: today(),
+    dataJson,
     createdBy,
   });
 }
@@ -220,33 +222,31 @@ async function insertConductRecord(db: Db, createdBy: string, fields: Record<str
 /** 学期累计旷课(各考勤模块旷课记录合计)→ 更新该学生的旷课预警记录。 */
 async function refreshAbsenceWarning(db: Db, no: string, name: string, className: string): Promise<void> {
   if (!no) return;
-  // 三个考勤模块的旷课记录统一汇总(数据量小,一次取回内存过滤)。
-  const rows = await db.select({ featureId: businessRecords.featureId, dataJson: businessRecords.dataJson })
-    .from(businessRecords)
-    .where(inArray(businessRecords.featureId, ABSENCE_FEATURES));
-  const totalHours = rows.filter((row) => {
-    const data = row.dataJson as Record<string, unknown>;
-    return str(data["学号"]) === no && isAbsence(data);
-  }).length;
+  // 三个考勤模块已抽为 attendances 真表，按学号 + 来源索引汇总旷课数。
+  const rows = await db.select({ attendanceStatus: attendances.attendanceStatus })
+    .from(attendances)
+    .where(and(eq(attendances.studentNo, no), inArray(attendances.sourceFeature, ABSENCE_FEATURES)));
+  const totalHours = rows.filter((row) => row.attendanceStatus === "旷课").length;
   const level = absenceWarningLevel(totalHours);
   // 移除该学生旧预警后写入最新状态(不足预警线则仅清理)。
-  const existing = await db.select({ id: businessRecords.id, dataJson: businessRecords.dataJson })
-    .from(businessRecords).where(eq(businessRecords.featureId, "absence-warning"));
-  const staleIds = existing.filter((row) => str((row.dataJson as Record<string, unknown>)["学号"]) === no).map((row) => row.id);
-  for (const id of staleIds) {
-    await db.delete(businessRecords).where(and(eq(businessRecords.featureId, "absence-warning"), eq(businessRecords.id, id)));
-  }
+  await db.delete(absenceWarnings).where(eq(absenceWarnings.studentNo, no));
   if (level) {
-    await db.insert(businessRecords).values({
+    const dataJson: Record<string, string> = {
+      姓名: name, 学号: no, 区队: className, 学期: currentTerm(),
+      累计旷课课时: String(totalHours), 预警等级: level,
+      对应处分: absencePunishment(totalHours) ?? "未达处分线",
+      更新时间: new Date().toISOString().slice(0, 16).replace("T", " "),
+    };
+    await db.insert(absenceWarnings).values({
       id: randomUUID(),
-      featureId: "absence-warning",
-      dataJson: {
-        姓名: name, 学号: no, 区队: className, 学期: currentTerm(),
-        累计旷课课时: String(totalHours), 预警等级: level,
-        对应处分: absencePunishment(totalHours) ?? "未达处分线",
-        更新时间: new Date().toISOString().slice(0, 16).replace("T", " "),
-      },
+      studentNo: no,
+      studentName: name,
+      className,
+      term: currentTerm(),
+      totalHours,
+      warningLevel: level,
       status: totalHours >= 10 ? "已达处分线" : "预警中",
+      dataJson,
       createdBy: null,
     });
   }

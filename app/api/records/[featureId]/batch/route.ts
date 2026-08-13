@@ -9,6 +9,7 @@ import { ApiError, fail, ok, readJson, requestIp, writeAudit, writeSystemLog } f
 import { validateRecordInput } from "@/lib/validation";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { afterRecordCreated, enrichRecordData, validateRecordAgainstDb, validateRecordBusiness } from "@/lib/records-hooks";
+import { getDomainConfig } from "@/lib/domains";
 
 type Db = ReturnType<typeof getDbType>;
 
@@ -70,9 +71,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ fe
           }
           const enriched = enrichRecordData(featureId, validated.data.data as Record<string, string | number>);
           const id = randomUUID();
-          await tx.insert(businessRecords).values({
-            id, featureId, dataJson: enriched, status: validated.data.status, createdBy: session.user.id,
-          });
+          const domainConfig = getDomainConfig(featureId);
+          if (domainConfig) {
+            await tx.insert(domainConfig.table as never).values({
+              id,
+              ...domainConfig.extractCore(enriched as Record<string, unknown>),
+              dataJson: enriched,
+              status: validated.data.status,
+              createdBy: session.user.id,
+            });
+          } else {
+            await tx.insert(businessRecords).values({
+              id, featureId, dataJson: enriched, status: validated.data.status, createdBy: session.user.id,
+            });
+          }
           saved.push({ id });
           // 创建后联动(处分→操行分、旷课→预警、学籍异动→学籍状态)，失败不阻断导入。
           try {

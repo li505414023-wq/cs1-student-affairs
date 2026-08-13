@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { auditLogs, businessRecords } from "@/db/schema";
+import { auditLogs, businessRecords, conductScores, leaves, punishments } from "@/db/schema";
 import { DELETE, PUT } from "@/app/api/records/[featureId]/[id]/route";
 import { POST as batchPost } from "@/app/api/records/[featureId]/batch/route";
 
@@ -212,8 +212,15 @@ describe("审批状态保护（流转中记录改删）", () => {
 describe("学生自我审批防护（PUT 状态强制 + 终态实例保护）", () => {
   it("学生 PUT 携带 status:\"已通过\" 落库仍为\"已提交\"（对齐 POST 语义）", async () => {
     mocks.getCurrentSession.mockResolvedValue(studentSession);
-    // loadRecord → 运行中计数 → 退回实例（无）→ 终态实例计数（无）
-    dbMock.queue([record({ createdBy: "u-student" })], [{ value: 0 }], [], [{ value: 0 }]);
+    // 领域表 domainGet：leaves 记录 → students 学号 → scope 命中 → 运行中计数 → 退回（无）→ 终态（无）
+    dbMock.queue(
+      [record({ createdBy: "u-student" })],
+      [{ no: "S001" }],
+      [{ id: "rec-1" }],
+      [{ value: 0 }],
+      [],
+      [{ value: 0 }],
+    );
     const response = await PUT(makeRequest("PUT", "http://localhost/api/records/leave/rec-1", { data: { 事由: "修改后" }, status: "已通过" }), recordParams("leave", "rec-1"));
     expect(response.status).toBe(200);
     expect(dbMock.state.updates).toHaveLength(1);
@@ -260,10 +267,13 @@ describe("批量导入走业务钩子流水线", () => {
     expect(response.status).toBe(201);
     const payload = await body(response);
     expect(payload.data?.savedCount).toBe(1);
-    const business = dbMock.state.inserts.filter((insert) => insert.table === businessRecords);
-    expect(business).toHaveLength(2); // 处分本体 + 操行分联动
-    expect(business.some((insert) => (insert.values as Row).featureId === "punishment")).toBe(true);
-    expect(business.some((insert) => (insert.values as Row).featureId === "conduct-score")).toBe(true);
+    // 处分本体写入领域表 punishments，操行分联动写入领域表 conduct_scores。
+    const punishmentInserts = dbMock.state.inserts.filter((insert) => insert.table === punishments);
+    const conductInserts = dbMock.state.inserts.filter((insert) => insert.table === conductScores);
+    expect(punishmentInserts).toHaveLength(1);
+    expect(conductInserts).toHaveLength(1);
+    expect((punishmentInserts[0].values as Row).studentNo).toBe("S001");
+    expect((conductInserts[0].values as Row).reason).toMatch("处分联动减分");
   });
 
   it("手册业务规则校验失败的行进入错误明细且不入库", async () => {
@@ -283,8 +293,8 @@ describe("批量导入走业务钩子流水线", () => {
 
   it("数据库前置校验生效：有生效处分的学生批量评优被拒", async () => {
     mocks.requirePermission.mockResolvedValue(adminSession);
-    // validateRecordAgainstDb 查询 punishment 记录（tx 复用同一 mock db）
-    dbMock.queue([{ dataJson: { 学号: "S001" }, status: "记过" }]);
+    // validateRecordAgainstDb 现查询领域表 punishments（索引），返回行即视为存在生效处分。
+    dbMock.queue([{ id: "p1" }]);
     const response = await batchPost(
       makeRequest("POST", "http://localhost/api/records/scholarship/batch", {
         records: [{ data: { 姓名: "张三", 学号: "S001" }, status: "已提交" }],
@@ -307,7 +317,8 @@ describe("批量导入走业务钩子流水线", () => {
       featureParams("leave"),
     );
     expect(response.status).toBe(201);
-    const inserted = dbMock.state.inserts.find((insert) => insert.table === businessRecords);
+    // leave 现写入领域表 leaves，data_json 仍携带补全后的审批链。
+    const inserted = dbMock.state.inserts.find((insert) => insert.table === leaves);
     expect((inserted?.values as Row).dataJson).toMatchObject({ 审批链: "区队指导员→大队长" });
   });
 });

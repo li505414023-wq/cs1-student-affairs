@@ -26,6 +26,7 @@ set -a
 source /etc/cs1.env
 set +a
 npm run db:migrate
+node scripts/migrate-jsonb.mjs
 
 echo "==> 5/6 重启服务"
 systemctl restart cs1

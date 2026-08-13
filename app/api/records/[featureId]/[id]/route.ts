@@ -11,6 +11,7 @@ import { canWriteFeatureStage } from "@/app/menu-policy";
 import { TERMINAL_WORKFLOW_STATUSES } from "@/lib/workflow/types";
 import { ApiError, fail, ok, readJson, requestIp, writeAudit } from "@/lib/api";
 import { validateRecordInput } from "@/lib/validation";
+import { domainDelete, domainGet, domainUpdate, getDomainConfig } from "@/lib/domains";
 
 export const runtime = "nodejs";
 
@@ -94,6 +95,19 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ fea
     const { featureId: raw, id } = await context.params;
     const featureId = validFeatureId(raw);
     const session = await requireWriteSession(request, featureId);
+    const domainConfig = getDomainConfig(featureId);
+    if (domainConfig) {
+      const existing = await domainGet(domainConfig, session, id);
+      if (featureId === "leave") {
+        await assertWorkflowEditable(id, existing.createdBy, session);
+      }
+      const validated = validateRecordInput(await readJson(request));
+      if (!validated.success) throw new ApiError(422, "业务数据校验失败", validated.errors);
+      const status = session.user.role === "student" && isStudentApplyFeature(featureId) ? "已提交" : validated.data.status;
+      await domainUpdate(domainConfig, id, validated.data.data as Record<string, unknown>, status);
+      await writeAudit({ userId: session.user.id, action: "update", resourceType: featureId, resourceId: id, ip: requestIp(request) });
+      return ok({ id, featureId, status, data: validated.data.data });
+    }
     const record = await loadRecordInScope(session, featureId, id);
     await assertWorkflowEditable(id, record.createdBy, session);
 
@@ -117,6 +131,16 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     const { featureId: raw, id } = await context.params;
     const featureId = validFeatureId(raw);
     const session = await requireWriteSession(request, featureId);
+    const domainConfig = getDomainConfig(featureId);
+    if (domainConfig) {
+      const existing = await domainGet(domainConfig, session, id);
+      if (featureId === "leave") {
+        await assertWorkflowEditable(id, existing.createdBy, session);
+      }
+      await domainDelete(domainConfig, id);
+      await writeAudit({ userId: session.user.id, action: "delete", resourceType: featureId, resourceId: id, ip: requestIp(request) });
+      return ok({ deleted: true });
+    }
     const record = await loadRecordInScope(session, featureId, id);
     await assertWorkflowEditable(id, record.createdBy, session);
 

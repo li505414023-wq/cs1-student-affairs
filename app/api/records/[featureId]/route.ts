@@ -13,6 +13,7 @@ import { ApiError, fail, ok, readJson, requestIp, writeAudit, writeSystemLog } f
 import { parsePagination } from "@/lib/http-utils";
 import { validateRecordInput } from "@/lib/validation";
 import { afterRecordCreated, enrichRecordData, validateRecordAgainstDb, validateRecordBusiness } from "@/lib/records-hooks";
+import { domainList, getDomainConfig } from "@/lib/domains";
 
 export const runtime = "nodejs";
 
@@ -28,6 +29,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ fea
     const featureId = validFeatureId(raw);
     const url = new URL(request.url);
     const { page, pageSize } = parsePagination(url);
+    // 领域表命中则走领域服务（真表索引查询），否则走通用 JSONB。
+    const domainConfig = getDomainConfig(featureId);
+    if (domainConfig) {
+      return ok(await domainList(domainConfig, session, { page, pageSize }));
+    }
     const db = getDb();
     const conditions = [eq(businessRecords.featureId, featureId), ...(await recordScopeConditions(session))];
     const where = and(...conditions);
@@ -83,6 +89,48 @@ export async function POST(request: NextRequest, context: { params: Promise<{ fe
     const dbError = await validateRecordAgainstDb(featureId, validated.data.data, db);
     if (dbError) throw new ApiError(422, dbError);
     const enriched = enrichRecordData(featureId, validated.data.data as Record<string, string | number>);
+    const domainConfig = getDomainConfig(featureId);
+    // 领域表（含 leave）写真表，其余 feature 继续走通用 JSONB。
+    if (domainConfig) {
+      const id = randomUUID();
+      const status = studentApply ? "已提交" : validated.data.status;
+      await db.insert(domainConfig.table as never).values({
+        id,
+        ...domainConfig.extractCore(enriched as Record<string, unknown>),
+        dataJson: enriched,
+        status,
+        createdBy: session.user.id,
+      });
+      await writeAudit({ userId: session.user.id, action: "create", resourceType: featureId, resourceId: id, ip: requestIp(request) });
+      try {
+        await afterRecordCreated(featureId, enriched as Record<string, string | number>, db, session.user.id);
+      } catch (hookError) {
+        writeSystemLog({
+          message: `记录创建联动失败: ${hookError instanceof Error ? hookError.message : String(hookError)}`,
+          request,
+          detail: { featureId, recordId: id },
+        });
+      }
+      let instanceId: string | null = null;
+      if (studentApply) {
+        try {
+          instanceId = await new WorkflowEngine().start(
+            modelKeyForFeature(featureId),
+            { ...enriched, applicant: session.user.displayName },
+            session.user.id,
+            id,
+            "leaves",
+          );
+          await writeAudit({ userId: session.user.id, action: "start_workflow", resourceType: "workflow_instance", resourceId: instanceId, detail: { featureId }, ip: requestIp(request) });
+        } catch (flowError) {
+          // 申请类业务必须启动审批流。流程缺失/异常时回滚刚写入的领域表记录并显式报错。
+          await db.delete(domainConfig.table as never).where(eq(domainConfig.table.id, id));
+          const reason = flowError instanceof Error ? flowError.message : String(flowError);
+          throw new ApiError(422, `审批流程启动失败：${reason}`);
+        }
+      }
+      return ok({ id, featureId, status, data: enriched, instanceId }, 201);
+    }
     const id = randomUUID();
     const status = studentApply ? "已提交" : validated.data.status;
     await db.insert(businessRecords).values({ id, featureId, dataJson: enriched, status, createdBy: session.user.id });

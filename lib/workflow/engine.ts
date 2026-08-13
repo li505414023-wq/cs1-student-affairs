@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq, and, inArray, count, getTableColumns } from "drizzle-orm";
 import { getDb } from "@/db";
-import { workflowInstances, workflowTasks, workflowEventLog, workflowModels, notifications, businessRecords } from "@/db/schema";
+import { workflowInstances, workflowTasks, workflowEventLog, workflowModels, notifications, businessRecords, leaves } from "@/db/schema";
 import { evaluate } from "./expression";
 import { canOperateTask, isFullAccessRole, assertInstanceAccess } from "./access";
 import { WorkflowError } from "./types";
@@ -18,7 +18,7 @@ export class WorkflowEngine {
   /**
    * Start a new workflow instance from a deployed model.
    */
-  async start(modelKey: string, formData: Record<string, unknown>, userId: string, recordId?: string): Promise<string> {
+  async start(modelKey: string, formData: Record<string, unknown>, userId: string, recordId?: string, recordTable = "business_records"): Promise<string> {
     // Load the latest deployed model
     const [model] = await this.db
       .select()
@@ -47,6 +47,7 @@ export class WorkflowEngine {
       status: "运行中",
       currentNodeId: startNodeId,
       recordId: recordId ?? null,
+      recordTable,
       startedBy: userId,
     });
 
@@ -458,11 +459,19 @@ export class WorkflowEngine {
    */
   private async syncRecordStatus(instanceId: string, recordStatus: string) {
     const [instance] = await this.db
-      .select({ recordId: workflowInstances.recordId })
+      .select({ recordId: workflowInstances.recordId, recordTable: workflowInstances.recordTable })
       .from(workflowInstances)
       .where(eq(workflowInstances.id, instanceId))
       .limit(1);
     if (!instance?.recordId) return;
+    // 多态业务记录：请假实例的 recordId 指向领域表 leaves，其余指向 business_records。
+    if (instance.recordTable === "leaves") {
+      await this.db
+        .update(leaves)
+        .set({ status: recordStatus, updatedAt: new Date() })
+        .where(eq(leaves.id, instance.recordId));
+      return;
+    }
     await this.db
       .update(businessRecords)
       .set({ status: recordStatus, updatedAt: new Date() })

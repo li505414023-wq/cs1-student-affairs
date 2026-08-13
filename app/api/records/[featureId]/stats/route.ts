@@ -5,6 +5,7 @@ import { businessRecords } from "@/db/schema";
 import { requirePermission } from "@/lib/auth";
 import { recordScopeConditions } from "@/lib/records-scope";
 import { ApiError, fail, ok } from "@/lib/api";
+import { domainStats, getDomainConfig } from "@/lib/domains";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ fea
     const featureId = validFeatureId(raw);
     const columns = (new URL(request.url).searchParams.get("columns") ?? "")
       .split(",").map((c) => c.trim()).filter((c) => c.length > 0 && c.length <= 40).slice(0, 12);
+
+    const domainConfig = getDomainConfig(featureId);
+    if (domainConfig) {
+      return ok(await domainStats(domainConfig, session, columns));
+    }
 
     const db = getDb();
     const where = and(eq(businessRecords.featureId, featureId), ...(await recordScopeConditions(session)));

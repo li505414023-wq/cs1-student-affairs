@@ -161,7 +161,9 @@ export const workflowInstances = pgTable("workflow_instances", {
   formDataJson: jsonb("form_data_json").$type<Record<string, unknown>>().notNull().default({}),
   status: text("status").notNull().default("运行中"),
   currentNodeId: text("current_node_id"),
-  recordId: text("record_id").references(() => businessRecords.id, { onDelete: "set null" }),
+  // 业务记录主键：不再外键约束，可指向 business_records 或领域真表（如 leaves）。
+  recordId: text("record_id"),
+  recordTable: text("record_table").notNull().default("business_records"),
   startedBy: text("started_by").references(() => users.id, { onDelete: "set null" }),
   startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
@@ -238,3 +240,127 @@ export const auditLogs = pgTable("audit_logs", {
   ip: text("ip").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 }, (table) => [index("audit_logs_user_idx").on(table.userId), index("audit_logs_resource_idx").on(table.resourceType, table.resourceId)]);
+
+// --- 领域表（Phase: 核心联动域从 businessRecords JSONB 抽表）---
+// 只列化参与「跨域联动 / 行级权限 / 列表过滤统计」的核心列，
+// 其余展示字段仍保留在 dataJson 中，保证对外 API 形状不变。
+
+export const punishments = pgTable("punishments", {
+  id: text("id").primaryKey(),
+  studentNo: text("student_no").notNull(),
+  studentName: text("student_name").notNull().default(""),
+  className: text("class_name").notNull().default(""),
+  punishmentType: text("punishment_type").notNull().default(""),
+  punishmentLevel: text("punishment_level").notNull().default(""),
+  status: text("status").notNull().default("生效中"),
+  dataJson: jsonb("data_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [
+  index("punishments_student_idx").on(table.studentNo),
+  index("punishments_status_idx").on(table.status),
+]);
+
+export const conductScores = pgTable("conduct_scores", {
+  id: text("id").primaryKey(),
+  studentNo: text("student_no").notNull(),
+  studentName: text("student_name").notNull().default(""),
+  className: text("class_name").notNull().default(""),
+  direction: text("direction").notNull().default("加分"),
+  score: integer("score").notNull().default(0),
+  reason: text("reason").notNull().default(""),
+  recordDate: text("record_date").notNull().default(""),
+  dataJson: jsonb("data_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [index("conduct_scores_student_idx").on(table.studentNo)]);
+
+export const courseScores = pgTable("course_scores", {
+  id: text("id").primaryKey(),
+  studentNo: text("student_no").notNull(),
+  studentName: text("student_name").notNull().default(""),
+  className: text("class_name").notNull().default(""),
+  term: text("term").notNull().default(""),
+  courseName: text("course_name").notNull().default(""),
+  score: integer("score").notNull().default(0),
+  passStatus: text("pass_status").notNull().default(""),
+  dataJson: jsonb("data_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [index("course_scores_student_idx").on(table.studentNo)]);
+
+export const physicalTests = pgTable("physical_tests", {
+  id: text("id").primaryKey(),
+  studentNo: text("student_no").notNull(),
+  studentName: text("student_name").notNull().default(""),
+  className: text("class_name").notNull().default(""),
+  item: text("item").notNull().default(""),
+  score: text("score").notNull().default(""),
+  result: text("result").notNull().default(""),
+  dataJson: jsonb("data_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [index("physical_tests_student_idx").on(table.studentNo)]);
+
+export const attendances = pgTable("attendances", {
+  id: text("id").primaryKey(),
+  studentNo: text("student_no").notNull(),
+  studentName: text("student_name").notNull().default(""),
+  className: text("class_name").notNull().default(""),
+  sourceFeature: text("source_feature").notNull().default(""),
+  attendanceDate: text("attendance_date").notNull().default(""),
+  slot: text("slot").notNull().default(""),
+  attendanceStatus: text("attendance_status").notNull().default(""),
+  dataJson: jsonb("data_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [
+  index("attendances_student_idx").on(table.studentNo),
+  index("attendances_date_idx").on(table.attendanceDate),
+]);
+
+export const absenceWarnings = pgTable("absence_warnings", {
+  id: text("id").primaryKey(),
+  studentNo: text("student_no").notNull(),
+  studentName: text("student_name").notNull().default(""),
+  className: text("class_name").notNull().default(""),
+  term: text("term").notNull().default(""),
+  totalHours: integer("total_hours").notNull().default(0),
+  warningLevel: text("warning_level").notNull().default(""),
+  status: text("status").notNull().default("预警中"),
+  dataJson: jsonb("data_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [index("absence_warnings_student_idx").on(table.studentNo)]);
+
+export const leaves = pgTable("leaves", {
+  id: text("id").primaryKey(),
+  studentNo: text("student_no").notNull(),
+  studentName: text("student_name").notNull().default(""),
+  className: text("class_name").notNull().default(""),
+  leaveType: text("leave_type").notNull().default(""),
+  startAt: text("start_at").notNull().default(""),
+  endAt: text("end_at").notNull().default(""),
+  days: integer("days").notNull().default(0),
+  approvalChain: text("approval_chain").notNull().default(""),
+  status: text("status").notNull().default("已提交"),
+  dataJson: jsonb("data_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [
+  index("leaves_student_idx").on(table.studentNo),
+  index("leaves_status_idx").on(table.status),
+]);
+
+export const statusChanges = pgTable("status_changes", {
+  id: text("id").primaryKey(),
+  studentNo: text("student_no").notNull(),
+  studentName: text("student_name").notNull().default(""),
+  className: text("class_name").notNull().default(""),
+  changeType: text("change_type").notNull().default(""),
+  effectiveDate: text("effective_date").notNull().default(""),
+  status: text("status").notNull().default("待处理"),
+  dataJson: jsonb("data_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [index("status_changes_student_idx").on(table.studentNo)]);
