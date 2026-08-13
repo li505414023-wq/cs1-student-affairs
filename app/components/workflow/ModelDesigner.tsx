@@ -34,12 +34,26 @@ export function ModelDesigner({ model, forms, onClose, onSave }: { model?: Workf
     <div className="designer-body">
       {step === 1 && <div className="form-selection"><section><h3>选择表单</h3><div className="radio-row">{["内置表单", "外置表单", "节点独立表单"].map((type) => <label key={type}><input type="radio" name="formType" checked={formType === type} onChange={() => setFormType(type)} />{type}</label>)}</div><label><span>关联表单</span><select value={formId} onChange={(event) => setFormId(event.target.value)}><option value="">请选择表单</option>{forms.map((form) => <option key={form.id} value={form.id}>{form.name}</option>)}</select></label></section><section className="form-preview"><h3>表单预览</h3>{selectedForm ? <><strong>{selectedForm.name}</strong>{selectedForm.fields.map((field) => <label key={field.id}><span>{field.required && "*"}{field.label}</span><input disabled placeholder={field.type} /></label>)}</> : <p>请选择表单</p>}</section></div>}
       {step === 2 && <div className="process-design"><aside><h3>节点组件</h3><button onClick={() => setNodes((current) => appendWorkflowNode(current, "approval"))}>＋ 添加审批节点</button><button onClick={() => setNodes((current) => appendWorkflowNode(current, "copy"))}>＋ 添加抄送节点</button><button onClick={() => setNodes((current) => appendWorkflowNode(current, "condition"))}>＋ 添加条件分支</button></aside><section><div className="process-toolbar"><strong>流程画布</strong><span>{nodes.length} 个节点</span></div><div className="process-canvas">{nodes.map((node, index) => <article className={`process-node ${node.type}`} key={node.id}><span className="node-order">{index + 1}</span><div><strong>{node.name}</strong><small>{node.assignee ?? "系统节点"}</small></div>{node.type === "condition" ? (
-  <input
-    aria-label={`${node.name}条件表达式`}
-    placeholder="如: ${days} > 3"
-    value={(node as Record<string, string>).conditionExpression ?? ""}
-    onChange={(event) => setNodes((current) => current.map((item) => item.id === node.id ? { ...item, conditionExpression: event.target.value } : item))}
-  />
+  <div className="condition-config">
+    <input
+      aria-label={`${node.name}条件表达式`}
+      placeholder="如: ${days} > 3"
+      value={(node as Record<string, string>).conditionExpression ?? ""}
+      onChange={(event) => setNodes((current) => current.map((item) => item.id === node.id ? { ...item, conditionExpression: event.target.value } : item))}
+    />
+    <label>满足时
+      <select aria-label={`${node.name}满足时跳转`} value={(node as Record<string, string>).trueNodeId ?? ""} onChange={(event) => setNodes((current) => current.map((item) => item.id === node.id ? { ...item, trueNodeId: event.target.value || undefined } : item))}>
+        <option value="">线性下一节点</option>
+        {nodes.filter((other) => other.id !== node.id && !["start", "submit"].includes(other.type)).map((other) => <option key={other.id} value={other.id}>{other.name}</option>)}
+      </select>
+    </label>
+    <label>否则
+      <select aria-label={`${node.name}否则跳转`} value={(node as Record<string, string>).falseNodeId ?? ""} onChange={(event) => setNodes((current) => current.map((item) => item.id === node.id ? { ...item, falseNodeId: event.target.value || undefined } : item))}>
+        <option value="">线性下一节点</option>
+        {nodes.filter((other) => other.id !== node.id && !["start", "submit"].includes(other.type)).map((other) => <option key={other.id} value={other.id}>{other.name}</option>)}
+      </select>
+    </label>
+  </div>
 ) : !["start", "end"].includes(node.type) && (
   <select aria-label={`${node.name}办理人`} value={node.assignee ?? ""} onChange={(event) => setNodes((current) => current.map((item) => item.id === node.id ? { ...item, assignee: event.target.value } : item))}>
     <option value="辅导员">辅导员</option><option value="院系管理员">院系管理员</option><option value="学工处管理员">学工处管理员</option><option value="宿管员">宿管员</option><option value="班主任">班主任</option><option value="工作人员">工作人员</option>

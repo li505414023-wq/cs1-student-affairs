@@ -220,6 +220,65 @@ describe("workflow engine authorization", () => {
   });
 });
 
+describe("workflow engine condition branching", () => {
+  const CONDITION_NODES = [
+    { id: "n-start", type: "start", name: "开始" },
+    { id: "n-submit", type: "submit", name: "申请人提交", assignee: "流程发起人" },
+    { id: "n-approve", type: "approval", name: "辅导员审批", assignee: "辅导员", assigneeType: "role" },
+    { id: "n-cond", type: "condition", name: "条件分支", conditionExpression: "${days} > 3", trueNodeId: "n-dean", falseNodeId: "n-end" },
+    { id: "n-dean", type: "approval", name: "院系审批", assignee: "院系管理员", assigneeType: "role" },
+    { id: "n-end", type: "end", name: "结束" },
+  ];
+
+  it("branches to the true target node when the condition holds", async () => {
+    dbHolder.current = createDbMock({
+      select: [
+        [instanceRow()],                                  // instance status check
+        [taskRow()],                                      // access check
+        [{ key: "leave", nodesJson: CONDITION_NODES }],   // model
+        [taskRow()],                                      // pending task
+        [instanceRow()],                                  // completeCurrentTask notification lookup
+        [instanceRow({ formDataJson: { days: "5" } })],   // evaluateCondition formData
+        [instanceRow()],                                  // activateNextNode notification lookup
+        [instanceRow({ status: "运行中", currentNodeId: "n-dean" })], // final re-read
+      ],
+      update: [
+        [{ id: "t-1" }], // completeCurrentTask
+        [],              // activateNextNode currentNodeId update
+      ],
+      insert: [[], [], [], [], []],
+    });
+    const engine = new WorkflowEngine();
+    const result = await engine.advance({ ...advanceBase });
+    expect(result.status).toBe("运行中");
+    expect(result.currentNodeId).toBe("n-dean");
+  });
+
+  it("branches to the false target (end) and completes when the condition fails", async () => {
+    dbHolder.current = createDbMock({
+      select: [
+        [instanceRow()],
+        [taskRow()],
+        [{ key: "leave", nodesJson: CONDITION_NODES }],
+        [taskRow()],
+        [instanceRow()],                                  // completeCurrentTask notification
+        [instanceRow({ formDataJson: { days: "1" } })],   // evaluateCondition → false
+        [{ recordId: null }],                             // syncRecordStatus lookup
+        [{ status: "已完成", currentNodeId: null }],      // final re-read
+      ],
+      update: [
+        [{ id: "t-1" }], // completeCurrentTask
+        [],              // instance completion update
+      ],
+      insert: [[], [], []], // notification, condition_evaluated log, instance_complete log
+    });
+    const engine = new WorkflowEngine();
+    const result = await engine.advance({ ...advanceBase });
+    expect(result.status).toBe("已完成");
+    expect(result.currentNodeId).toBeNull();
+  });
+});
+
 describe("workflow engine claim authorization", () => {
   it("rejects claiming a task when the user is not in the candidate set", async () => {
     dbHolder.current = createDbMock({

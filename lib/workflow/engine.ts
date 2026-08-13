@@ -478,55 +478,73 @@ export class WorkflowEngine {
       .where(eq(businessRecords.id, instance.recordId));
   }
 
+  /**
+   * Evaluate a condition node's expression against the instance form data.
+   * Logs the outcome for the audit trail. Empty expression passes through (true).
+   */
+  private async evaluateCondition(instanceId: string, node: Record<string, unknown>): Promise<boolean> {
+    const [instance] = await this.db
+      .select()
+      .from(workflowInstances)
+      .where(eq(workflowInstances.id, instanceId))
+      .limit(1);
+    const conditionExpr = node.conditionExpression as string | undefined;
+    const shouldBranch = conditionExpr
+      ? evaluate(conditionExpr, { formData: instance?.formDataJson as Record<string, unknown> ?? {}, user: { id: instance?.startedBy ?? "", role: "" } })
+      : true;
+    await this.logEvent(instanceId, node.id as string, "condition_evaluated", String(shouldBranch));
+    return shouldBranch;
+  }
+
+  /** Complete the instance as passed (reached end node or ran out of nodes). */
+  private async completeInstance(instanceId: string) {
+    await this.db
+      .update(workflowInstances)
+      .set({ status: "已完成", currentNodeId: null, completedAt: new Date() })
+      .where(eq(workflowInstances.id, instanceId));
+    await this.logEvent(instanceId, "end", "instance_complete", "");
+    await this.syncRecordStatus(instanceId, "已通过");
+  }
+
+  /**
+   * Resolve the next actionable node after `fromNode`, auto-skipping submit
+   * and condition nodes. Condition nodes branch by trueNodeId/falseNodeId when
+   * configured, otherwise fall back to linear order. Returns null at flow end.
+   * `visited` guards against cycles in branching configurations.
+   */
+  private async resolveNext(instanceId: string, fromNode: Record<string, unknown>, nodes: Array<Record<string, unknown>>, visited: Set<string>): Promise<Record<string, unknown> | null> {
+    if (visited.has(fromNode.id as string)) return null;
+    visited.add(fromNode.id as string);
+
+    let next: Record<string, unknown> | undefined;
+    if (fromNode.type === "condition") {
+      const shouldBranch = await this.evaluateCondition(instanceId, fromNode);
+      const targetId = (shouldBranch ? fromNode.trueNodeId : fromNode.falseNodeId) as string | undefined;
+      next = targetId ? nodes.find((n) => n.id === targetId) : nodes[nodes.indexOf(fromNode) + 1];
+    } else {
+      next = nodes[nodes.indexOf(fromNode) + 1];
+    }
+
+    if (!next || next.type === "end") return null;
+    if (next.type === "submit") {
+      await this.logEvent(instanceId, next.id as string, "node_auto_submit", "");
+      return this.resolveNext(instanceId, next, nodes, visited);
+    }
+    if (next.type === "condition") {
+      return this.resolveNext(instanceId, next, nodes, visited);
+    }
+    return next;
+  }
+
   private async transitionToNext(instanceId: string, currentNodeId: string, nodes: Array<Record<string, unknown>>) {
     const currentNode = nodes.find((n) => n.id === currentNodeId);
     if (!currentNode) return;
-
-    // Find the next node(s) after the current one
-    const currentIndex = nodes.indexOf(currentNode);
-    const nextNode = nodes[currentIndex + 1];
-
-    if (!nextNode || (nextNode.type as string) === "end") {
-      // Reached end — complete the instance
-      await this.db
-        .update(workflowInstances)
-        .set({ status: "已完成", currentNodeId: null, completedAt: new Date() })
-        .where(eq(workflowInstances.id, instanceId));
-      await this.logEvent(instanceId, "end", "instance_complete", "");
-      await this.syncRecordStatus(instanceId, "已通过");
+    const next = await this.resolveNext(instanceId, currentNode, nodes, new Set());
+    if (!next) {
+      await this.completeInstance(instanceId);
       return;
     }
-
-    // Applicant submit nodes are fulfilled by the act of starting the instance
-    // (the form was already submitted), so advance past them automatically.
-    if ((nextNode.type as string) === "submit") {
-      await this.logEvent(instanceId, nextNode.id as string, "node_auto_submit", "");
-      await this.transitionToNext(instanceId, nextNode.id as string, nodes);
-      return;
-    }
-
-    // Handle condition nodes
-    if ((nextNode.type as string) === "condition") {
-      const [instance] = await this.db
-        .select()
-        .from(workflowInstances)
-        .where(eq(workflowInstances.id, instanceId))
-        .limit(1);
-
-      const conditionExpr = nextNode.conditionExpression as string | undefined;
-      const shouldBranch = conditionExpr
-        ? evaluate(conditionExpr, { formData: instance?.formDataJson as Record<string, unknown> ?? {}, user: { id: instance?.startedBy ?? "", role: "" } })
-        : true;
-
-      // The linear engine has no alternate branch yet, so both outcomes
-      // advance past the condition node; log the result for the audit trail.
-      await this.logEvent(instanceId, nextNode.id as string, "condition_evaluated", String(shouldBranch));
-      const afterCondition = nodes[currentIndex + 2];
-      await this.activateNextNode(instanceId, afterCondition);
-      return;
-    }
-
-    await this.activateNextNode(instanceId, nextNode);
+    await this.activateNextNode(instanceId, next);
   }
 
   private async activateNextNode(instanceId: string, nextNode: Record<string, unknown> | undefined) {

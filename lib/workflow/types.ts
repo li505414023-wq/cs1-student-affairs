@@ -18,6 +18,9 @@ export interface WorkflowNode {
   assigneeValue?: string;
   formId?: string;
   conditionExpression?: string;
+  // 条件分支目标节点 id（条件为真/假时分别跳转）；未配置时回退线性跳过。
+  trueNodeId?: string;
+  falseNodeId?: string;
   dueHours?: number;
 }
 
