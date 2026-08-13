@@ -16,7 +16,7 @@ set -euo pipefail
 
 SERVER="${SERVER:-cs-server}"
 APP_DIR="${APP_DIR:-/opt/cs1}"
-REPO_URL="${REPO_URL:-https://github.com/li505414023-wq/cs1-student-affairs.git}"
+REPO_URL="${REPO_URL:-git@github.com:li505414023-wq/cs1-student-affairs.git}"
 HEALTH_URL="${HEALTH_URL:-https://www.505414023.top/api/health}"
 
 cd "$(git rev-parse --show-toplevel)"

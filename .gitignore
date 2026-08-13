@@ -49,3 +49,4 @@ patrol-*.png
 
 # local agent settings
 .claude/settings.local.json
+.workbuddy/
