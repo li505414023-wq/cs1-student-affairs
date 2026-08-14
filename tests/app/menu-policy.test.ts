@@ -31,11 +31,12 @@ describe("menu policy", () => {
   });
 
   it("hides review-stage admin features from students (no 403-on-submit menus)", () => {
-    // 投诉/困难补助/奖学金评定/返校(及助学金)是管理端 review 类功能，
-    // 后端 STUDENT_APPLY_FEATURES 不允许学生提交，前端菜单必须同步收敛。
-    for (const featureId of ["complaints", "hardship", "scholarship", "return-school", "grants"]) {
-      expect(isFeatureVisible(featureId, "student"), featureId).toBe(false);
-      expect(STUDENT_VISIBLE_FEATURES.has(featureId), featureId).toBe(false);
+    // 返校确认是管理端功能，学生不可见；投诉/困难补助/奖学金/助学金已开放为学生申请，学生可见。
+    expect(isFeatureVisible("return-school", "student")).toBe(false);
+    expect(STUDENT_VISIBLE_FEATURES.has("return-school")).toBe(false);
+    for (const featureId of ["complaints", "hardship", "scholarship", "grants"]) {
+      expect(isFeatureVisible(featureId, "student"), featureId).toBe(true);
+      expect(STUDENT_VISIBLE_FEATURES.has(featureId), featureId).toBe(true);
     }
   });
 

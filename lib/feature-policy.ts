@@ -17,6 +17,19 @@ export const STUDENT_APPLY_FEATURES: ReadonlySet<string> = new Set([
   "dorm-checkout",
   "holiday-dorm",
   "delayed-checkout",
+  // 助困奖罚与事务申请（评审类：辅导员→院系→学校）
+  "work-study",
+  "hardship",
+  "grants",
+  "scholarship",
+  "tuition-reduction",
+  "loans",
+  "personal-honor",
+  "collective-honor",
+  "leave-cancel",
+  "complaints",
+  "league-member",
+  "leaving",
 ]);
 
 /**

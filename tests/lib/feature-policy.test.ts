@@ -6,7 +6,11 @@ describe("feature policy", () => {
     expect(isStudentApplyFeature("leave")).toBe(true);
     expect(isStudentApplyFeature("dorm-checkin")).toBe(true);
     expect(isStudentApplyFeature("student-card")).toBe(true);
-    expect(isStudentApplyFeature("scholarship")).toBe(false);
+    // 助困奖罚类申请对学生开放
+    expect(isStudentApplyFeature("scholarship")).toBe(true);
+    expect(isStudentApplyFeature("grants")).toBe(true);
+    expect(isStudentApplyFeature("hardship")).toBe(true);
+    // 非申请类业务学生不可提交
     expect(isStudentApplyFeature("punishment")).toBe(false);
     expect(isStudentApplyFeature("discipline")).toBe(false);
   });
