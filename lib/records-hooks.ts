@@ -6,10 +6,13 @@ import {
   attendances,
   conductScores,
   courseScores,
+  crisisRecords,
+  helpRecords,
   managedItems,
   physicalTests,
   punishments,
   students,
+  talks,
 } from "@/db/schema";
 import { STATUS_CHANGE_TYPES } from "@/lib/dictionaries.js";
 import {
@@ -18,6 +21,7 @@ import {
   CONDUCT_BASE_SCORE,
   CONDUCT_VETO_LINE,
   COURSE_VETO_LINE,
+  CRISIS_CYCLE_DAYS,
   isAppealInDeadline,
   leaveApprovalChain,
   leaveChainValid,
@@ -200,7 +204,72 @@ export async function afterRecordCreated(featureId: string, data: RecordData, db
     if (no && statusMap[type]) {
       await db.update(students).set({ status: statusMap[type] }).where(eq(students.no, no));
     }
+    return;
   }
+  if (featureId === "crisis-records") {
+    // 危机记录创建 → 同步学生主档危机等级与预警解除状态。
+    const no = str(data["学号"]);
+    const level = str(data["危机等级"]);
+    if (no && level) {
+      await db.update(students).set({ crisisLevel: level, crisisRelief: "待核实" }).where(eq(students.no, no));
+    }
+    return;
+  }
+  if (featureId === "course-scores") {
+    // 成绩挂科 → 自动生成学业帮扶记录（同一学生同一课程只建一次）。
+    const no = str(data["学号"]);
+    const score = Number(str(data["课程成绩"]));
+    const courseName = str(data["课程名称"]);
+    if (no && courseName && Number.isFinite(score) && score < COURSE_VETO_LINE) {
+      const [existing] = await db.select({ id: helpRecords.id })
+        .from(helpRecords)
+        .where(and(eq(helpRecords.studentNo, no), eq(helpRecords.courseName, courseName)))
+        .limit(1);
+      if (!existing) {
+        await insertHelpRecord(db, createdBy, {
+          姓名: str(data["姓名"]), 学号: no, 区队: str(data["区队"]),
+          挂科课程: courseName, 成绩: String(score),
+        });
+      }
+    }
+    return;
+  }
+  if (featureId === "talks") {
+    // 谈话记录 → 若未指定下次回访日期，按学生危机等级自动计算并回填。
+    const no = str(data["学号"]);
+    const nextDate = str(data["下次回访"] ?? data["下次谈话日期"] ?? "");
+    if (no && !nextDate) {
+      const [stu] = await db.select({ crisisLevel: students.crisisLevel }).from(students).where(eq(students.no, no)).limit(1);
+      const cycle = stu?.crisisLevel ? CRISIS_CYCLE_DAYS[stu.crisisLevel] : 0;
+      if (cycle) {
+        const base = str(data["谈话日期"]) || today();
+        const next = new Date(base);
+        if (!Number.isNaN(next.getTime())) {
+          next.setDate(next.getDate() + cycle);
+          const nextStr = next.toISOString().slice(0, 10);
+          await db.update(talks).set({ nextDate: nextStr, cycleDays: cycle }).where(and(eq(talks.studentNo, no), eq(talks.talkDate, base)));
+        }
+      }
+    }
+  }
+}
+
+async function insertHelpRecord(db: Db, createdBy: string, fields: Record<string, string>): Promise<void> {
+  const dataJson = { ...fields, 帮扶周期: "自动生成", 记录人: "系统联动" };
+  await db.insert(helpRecords).values({
+    id: randomUUID(),
+    studentNo: fields["学号"] ?? "",
+    studentName: fields["姓名"] ?? "",
+    className: fields["区队"] ?? "",
+    courseName: fields["挂科课程"] ?? "",
+    score: Number(fields["成绩"]) || 0,
+    measure: "成绩预警自动生成帮扶",
+    cycle: "自动生成",
+    effect: "",
+    status: "帮扶中",
+    dataJson,
+    createdBy,
+  });
 }
 
 async function insertConductRecord(db: Db, createdBy: string, fields: Record<string, string>): Promise<void> {

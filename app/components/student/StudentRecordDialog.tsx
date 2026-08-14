@@ -5,6 +5,7 @@ import { FormSection } from "../forms/FormSection";
 import { FormField, type FieldSpec } from "../forms/FormField";
 import { useEntityOptions } from "../shared/use-entity-options";
 import { validateStudentInput } from "@/lib/validation";
+import { api } from "@/lib/api-client";
 import type { StudentEditor, StudentRecord } from "./student-types";
 
 const PATH_TO_LABEL: Record<string, string> = {
@@ -20,9 +21,18 @@ function yearOptions(): string[] {
 export function StudentRecordDialog({ editor, onClose, onSave }: { editor: NonNullable<StudentEditor>; onClose: () => void; onSave: (student: StudentRecord) => void }) {
   const [photoName, setPhotoName] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [timeline, setTimeline] = useState<Array<{ type: string; label: string; date: string; summary: string }>>([]);
   const photoInput = useRef<HTMLInputElement>(null);
   const isCreate = editor.mode === "create";
   const readOnly = editor.mode === "view";
+
+  // 查看模式下加载学生档案时间线（聚合谈话/危机/成绩/奖惩等记录）。
+  useEffect(() => {
+    if (!readOnly || !editor.student?.id) return;
+    api.get<{ events: Array<{ type: string; label: string; date: string; summary: string }> }>(`/api/students/${editor.student.id}/timeline`)
+      .then((res) => setTimeline(res.events ?? []))
+      .catch(() => setTimeline([]));
+  }, [readOnly, editor.student?.id]);
 
   // Cascading org selects (faculty → major → class), fed by reference data.
   const [facultyCode, setFacultyCode] = useState("");
@@ -80,6 +90,11 @@ export function StudentRecordDialog({ editor, onClose, onSave }: { editor: NonNu
     { label: "是否属于迎新批次", required: true, type: "select", options: ["是", "否"] },
     { label: "迎新批次", type: "select", options: ["2026 秋季迎新", "2026 春季迎新"] },
   ];
+  const careFields: FieldSpec[] = [
+    { label: "关注类型", type: "select", options: ["学业", "经济", "心理", "就业", "其他"] },
+    { label: "危机等级", type: "select", options: ["一级", "二级", "三级"] },
+    { label: "预警解除状态", type: "select", options: ["已解除", "待核实", "持续跟进"] },
+  ];
   const values: Record<string, string | undefined> = { 学号: editor.student?.no, 姓名: editor.student?.name, 性别: editor.student?.gender, 出生日期: editor.student?.birthDate, 移动电话: editor.student?.phone, 现地址: editor.student?.address };
   const hydrate = (fields: FieldSpec[]) => fields.map((field) => {
     const existing = values[field.label];
@@ -107,6 +122,7 @@ export function StudentRecordDialog({ editor, onClose, onSave }: { editor: NonNu
       name: String(data.get("姓名") ?? ""), no: String(data.get("学号") ?? ""), phone: String(data.get("移动电话") ?? ""),
       gender: String(data.get("性别") ?? ""), faculty: facultyName, major: majorName, className, grade,
       birthDate: String(data.get("出生日期") ?? ""), address: String(data.get("现地址") ?? ""), status: String(data.get("学生当前状态") ?? "在读"),
+      concernType: String(data.get("关注类型") ?? ""), crisisLevel: String(data.get("危机等级") ?? ""), crisisRelief: String(data.get("预警解除状态") ?? ""),
     };
     const next: Record<string, string> = {};
     const validated = validateStudentInput(payload);
@@ -124,5 +140,5 @@ export function StudentRecordDialog({ editor, onClose, onSave }: { editor: NonNu
     onSave(payload);
   };
 
-  return <div className="full-form-page"><div className="form-page-head"><div><p className="eyebrow">学生管理 / {title}</p><h1>{title}</h1></div><button className="ghost" onClick={onClose}>关闭</button></div><form className="form-card" noValidate onSubmit={submit} onReset={() => { setFacultyCode(""); setMajorCode(""); setClassCode(""); setGrade(""); setErrors({}); setPhotoName(""); }}><FormSection title="基本信息"><div className="photo-and-fields"><div className="photo-upload"><button className="photo-box" type="button" disabled={readOnly} onClick={() => photoInput.current?.click()}>＋</button><strong>{photoName || "照片"}</strong><small>建议上传一寸免冠照片<br />像素 413×295 左右</small><input ref={photoInput} className="file-input" type="file" accept="image/*" onChange={(event) => setPhotoName(event.target.files?.[0]?.name ?? "")} /></div><div className="form-grid">{hydrate(basicFields).map((field) => <FormField key={field.label} field={field} readOnly={readOnly} error={errors[field.label]} />)}{!readOnly ? <>{cascadeSelect("院系名称", facultyCode, faculties, (code) => { setFacultyCode(code); setMajorCode(""); setClassCode(""); }, "请选择院系")}{cascadeSelect("专业名称", majorCode, majors, (code) => { setMajorCode(code); setClassCode(""); }, facultyCode ? "请选择专业" : "请先选择院系")}{cascadeSelect("班级名称", classCode, classes, setClassCode, majorCode ? "请选择班级" : "请先选择专业")}<label><span><b className="required">*</b>入学年级</span><select value={grade} aria-invalid={!!errors["入学年级"]} onChange={(event) => setGrade(event.target.value)}>{!grade && <option value="">请选择年级</option>}{yearOptions().map((y) => <option key={y} value={y}>{y}</option>)}</select>{errors["入学年级"] && <span className="field-error" role="alert">{errors["入学年级"]}</span>}</label></> : <>{facultyName && <label><span>院系名称</span><input value={facultyName} readOnly /></label>}{majorName && <label><span>专业名称</span><input value={majorName} readOnly /></label>}{className && <label><span>班级名称</span><input value={className} readOnly /></label>}{grade && <label><span>入学年级</span><input value={grade} readOnly /></label>}</>}</div></div></FormSection><FormSection title="学籍信息" fields={hydrate(statusFields)} readOnly={readOnly} errors={errors} /><FormSection title="个人信息" fields={hydrate(personalFields)} readOnly={readOnly} errors={errors} /><FormSection title="迎新信息" fields={hydrate(welcomeFields)} readOnly={readOnly} errors={errors} /><p className="privacy-note">学生信息将安全保存在云端 PostgreSQL 数据库。</p><div className="form-actions">{!readOnly && <button className="primary" type="submit">▣ 保存</button>}{!readOnly && <button className="ghost" type="reset">清空</button>}<button className="ghost" type="button" onClick={onClose}>{readOnly ? "返回" : "取消"}</button></div></form></div>;
+  return <div className="full-form-page"><div className="form-page-head"><div><p className="eyebrow">学生管理 / {title}</p><h1>{title}</h1></div><button className="ghost" onClick={onClose}>关闭</button></div><form className="form-card" noValidate onSubmit={submit} onReset={() => { setFacultyCode(""); setMajorCode(""); setClassCode(""); setGrade(""); setErrors({}); setPhotoName(""); }}><FormSection title="基本信息"><div className="photo-and-fields"><div className="photo-upload"><button className="photo-box" type="button" disabled={readOnly} onClick={() => photoInput.current?.click()}>＋</button><strong>{photoName || "照片"}</strong><small>建议上传一寸免冠照片<br />像素 413×295 左右</small><input ref={photoInput} className="file-input" type="file" accept="image/*" onChange={(event) => setPhotoName(event.target.files?.[0]?.name ?? "")} /></div><div className="form-grid">{hydrate(basicFields).map((field) => <FormField key={field.label} field={field} readOnly={readOnly} error={errors[field.label]} />)}{!readOnly ? <>{cascadeSelect("院系名称", facultyCode, faculties, (code) => { setFacultyCode(code); setMajorCode(""); setClassCode(""); }, "请选择院系")}{cascadeSelect("专业名称", majorCode, majors, (code) => { setMajorCode(code); setClassCode(""); }, facultyCode ? "请选择专业" : "请先选择院系")}{cascadeSelect("班级名称", classCode, classes, setClassCode, majorCode ? "请选择班级" : "请先选择专业")}<label><span><b className="required">*</b>入学年级</span><select value={grade} aria-invalid={!!errors["入学年级"]} onChange={(event) => setGrade(event.target.value)}>{!grade && <option value="">请选择年级</option>}{yearOptions().map((y) => <option key={y} value={y}>{y}</option>)}</select>{errors["入学年级"] && <span className="field-error" role="alert">{errors["入学年级"]}</span>}</label></> : <>{facultyName && <label><span>院系名称</span><input value={facultyName} readOnly /></label>}{majorName && <label><span>专业名称</span><input value={majorName} readOnly /></label>}{className && <label><span>班级名称</span><input value={className} readOnly /></label>}{grade && <label><span>入学年级</span><input value={grade} readOnly /></label>}</>}</div></div></FormSection><FormSection title="学籍信息" fields={hydrate(statusFields)} readOnly={readOnly} errors={errors} /><FormSection title="个人信息" fields={hydrate(personalFields)} readOnly={readOnly} errors={errors} /><FormSection title="迎新信息" fields={hydrate(welcomeFields)} readOnly={readOnly} errors={errors} /><FormSection title="辅导员关怀" fields={hydrate(careFields)} readOnly={readOnly} errors={errors} />{readOnly && <div className="student-timeline"><h3>档案时间线</h3>{timeline.length === 0 ? <p className="muted">暂无关联记录</p> : <ul>{timeline.map((event, index) => <li key={index}><span className="tl-date">{event.date}</span><span className="tl-label">{event.label}</span><span className="tl-summary">{event.summary}</span></li>)}</ul>}</div>}<p className="privacy-note">学生信息将安全保存在云端 PostgreSQL 数据库。</p><div className="form-actions">{!readOnly && <button className="primary" type="submit">▣ 保存</button>}{!readOnly && <button className="ghost" type="reset">清空</button>}<button className="ghost" type="button" onClick={onClose}>{readOnly ? "返回" : "取消"}</button></div></form></div>;
 }

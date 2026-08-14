@@ -30,6 +30,15 @@ export function leaveChainValid(days: number): boolean {
   return leaveApprovalChain(days) !== "";
 }
 
+/* ---------------- 心理危机回访周期（辅导员关怀） ---------------- */
+
+/** 危机等级 → 下次谈话回访周期（天）。 */
+export const CRISIS_CYCLE_DAYS: Record<string, number> = {
+  一级: 7,
+  二级: 14,
+  三级: 30,
+};
+
 /** 审批链岗位 → 系统角色标签（工作流任务按 roleTags 匹配审批人）。 */
 export const LEAVE_APPROVER_ROLE: Record<string, string> = {
   区队指导员: "辅导员",

@@ -101,10 +101,15 @@ export const students = pgTable("students", {
   idCard: text("id_card"),
   address: text("address").notNull().default(""),
   status: text("status").notNull().default("在读"),
+  // 辅导员关怀字段（融入 counselor-desk 能力）
+  concernType: text("concern_type").notNull().default(""),
+  crisisLevel: text("crisis_level").notNull().default(""),
+  crisisRelief: text("crisis_relief").notNull().default(""),
+  customFields: jsonb("custom_fields").$type<Record<string, unknown>>().notNull().default({}),
   userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
   createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
   ...timestamps,
-}, (table) => [uniqueIndex("students_no_uidx").on(table.no), index("students_name_idx").on(table.name), index("students_faculty_idx").on(table.faculty)]);
+}, (table) => [uniqueIndex("students_no_uidx").on(table.no), index("students_name_idx").on(table.name), index("students_faculty_idx").on(table.faculty), index("students_crisis_idx").on(table.crisisLevel)]);
 
 export const businessRecords = pgTable("business_records", {
   id: text("id").primaryKey(),
@@ -364,3 +369,54 @@ export const statusChanges = pgTable("status_changes", {
   createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
   ...timestamps,
 }, (table) => [index("status_changes_student_idx").on(table.studentNo)]);
+
+// --- 辅导员关怀领域表（融入 counselor-desk：谈心谈话 / 心理危机 / 学业帮扶）---
+
+export const talks = pgTable("talks", {
+  id: text("id").primaryKey(),
+  studentNo: text("student_no").notNull(),
+  studentName: text("student_name").notNull().default(""),
+  className: text("class_name").notNull().default(""),
+  topic: text("topic").notNull().default(""),
+  way: text("way").notNull().default(""),
+  content: text("content").notNull().default(""),
+  talkDate: text("talk_date").notNull().default(""),
+  nextDate: text("next_date").notNull().default(""),
+  cycleDays: integer("cycle_days").notNull().default(0),
+  dataJson: jsonb("data_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [index("talks_student_idx").on(table.studentNo), index("talks_date_idx").on(table.talkDate)]);
+
+export const crisisRecords = pgTable("crisis_records", {
+  id: text("id").primaryKey(),
+  studentNo: text("student_no").notNull(),
+  studentName: text("student_name").notNull().default(""),
+  className: text("class_name").notNull().default(""),
+  discoverWay: text("discover_way").notNull().default(""),
+  crisisLevel: text("crisis_level").notNull().default(""),
+  reason: text("reason").notNull().default(""),
+  intervention: text("intervention").notNull().default(""),
+  followup: text("followup").notNull().default(""),
+  responsible: text("responsible").notNull().default(""),
+  status: text("status").notNull().default("跟踪中"),
+  dataJson: jsonb("data_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [index("crisis_records_student_idx").on(table.studentNo), index("crisis_records_level_idx").on(table.crisisLevel)]);
+
+export const helpRecords = pgTable("help_records", {
+  id: text("id").primaryKey(),
+  studentNo: text("student_no").notNull(),
+  studentName: text("student_name").notNull().default(""),
+  className: text("class_name").notNull().default(""),
+  courseName: text("course_name").notNull().default(""),
+  score: integer("score").notNull().default(0),
+  measure: text("measure").notNull().default(""),
+  cycle: text("cycle").notNull().default(""),
+  effect: text("effect").notNull().default(""),
+  status: text("status").notNull().default("帮扶中"),
+  dataJson: jsonb("data_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [index("help_records_student_idx").on(table.studentNo)]);

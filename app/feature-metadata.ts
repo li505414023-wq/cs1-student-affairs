@@ -1,5 +1,17 @@
 // 领域字典唯一来源：业务选项统一在 lib/dictionaries.js 维护。
-import { LEAVE_TYPES, PUNISHMENT_TYPES, STATUS_CHANGE_TYPES, VIOLATION_LEVELS } from "@/lib/dictionaries.js";
+import {
+  CONCERN_TYPES,
+  CRISIS_DISCOVER_WAYS,
+  CRISIS_LEVELS,
+  CRISIS_RELIEF_STATUSES,
+  CRISIS_STATUSES,
+  HELP_STATUSES,
+  LEAVE_TYPES,
+  PUNISHMENT_TYPES,
+  STATUS_CHANGE_TYPES,
+  TALK_WAYS,
+  VIOLATION_LEVELS,
+} from "@/lib/dictionaries.js";
 
 export type PageVariant = "list" | "statistics" | "workflow" | "logs";
 
@@ -127,6 +139,9 @@ export const featurePresentations: Record<string, FeaturePresentation> = {
   "duty-assignment": { variant: "list", filters: ["执勤日期", "执勤地点", "区队", "姓名"], columns: ["执勤日期", "执勤时段", "执勤地点", "姓名", "学号", "区队", "带队教师", "执勤状态"], primaryAction: "安排执勤", rowAction: "编辑" },
   "emergency-drill": { variant: "list", filters: ["演练名称", "演练类型", "开展日期"], columns: ["演练名称", "演练类型", "开展日期", "参与区队", "参与人数", "完成用时(分)", "演练评价", "组织者"], primaryAction: "演练登记", rowAction: "详情" },
   "political-review": { variant: "list", filters: ["姓名", "学号", "审查状态"], columns: ["姓名", "学号", "区队", "审查类别", "提交日期", "审查意见", "审查状态"], primaryAction: "新增档案", rowAction: "详情" },
+  talks: { variant: "list", filters: ["姓名", "学号", "谈话方式", "谈话日期"], columns: ["姓名", "学号", "谈话主题", "谈话方式", "谈话日期", "下次回访", "谈话内容"], primaryAction: "新增谈话记录", rowAction: "编辑" },
+  "crisis-records": { variant: "list", filters: ["姓名", "学号", "危机等级", "危机状态"], columns: ["姓名", "学号", "危机等级", "发现方式", "危机原因", "干预措施", "危机状态"], primaryAction: "新增危机记录", rowAction: "编辑" },
+  "help-records": { variant: "list", filters: ["姓名", "学号", "帮扶状态"], columns: ["姓名", "学号", "挂科课程", "成绩", "帮扶措施", "帮扶周期", "帮扶状态"], primaryAction: "新增帮扶记录", rowAction: "编辑" },
 };
 
 export function getPresentation(featureId: string, stage?: string): FeaturePresentation {
@@ -199,6 +214,13 @@ const exactFilterOptions: Record<string, string[]> = {
   结束类型: ["正常办结", "撤回终止", "超时终止"],
   变动类型: ["调入", "调出", "专业变更", "年级变更"],
   退宿类型: ["毕业退宿", "休学退宿", "调宿退宿", "其他"],
+  谈话方式: [...TALK_WAYS],
+  危机等级: [...CRISIS_LEVELS],
+  发现方式: [...CRISIS_DISCOVER_WAYS],
+  危机状态: [...CRISIS_STATUSES],
+  帮扶状态: [...HELP_STATUSES],
+  关注类型: [...CONCERN_TYPES],
+  预警解除状态: [...CRISIS_RELIEF_STATUSES],
 };
 
 export function filterOptionsFor(filter: string): string[] | null {

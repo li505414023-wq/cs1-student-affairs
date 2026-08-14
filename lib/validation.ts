@@ -20,6 +20,9 @@ const studentSchema = z.object({
   birthDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "出生日期格式不正确").optional().default(""),
   address: optionalText(200),
   status: z.enum(["在读", "休学", "退学", "毕业"], { error: "请选择学生当前状态" }).optional().default("在读"),
+  concernType: optionalText(30),
+  crisisLevel: optionalText(30),
+  crisisRelief: optionalText(30),
 });
 
 export type StudentInput = z.infer<typeof studentSchema>;

@@ -7,8 +7,8 @@ const systemDataSource = await readFile(new URL("../app/system-data.ts", import.
 const featureIds = extractFeatureIds(systemDataSource);
 
 test("extracts every feature entry from all five systems", () => {
-  assert.equal(featureIds.length, 116);
-  assert.equal(new Set(featureIds).size, 116);
+  assert.equal(featureIds.length, 119);
+  assert.equal(new Set(featureIds).size, 119);
   for (const expected of ["students", "leave", "card-checkin", "dorm-repair", "morning-exercise", "deployment", "error-log"]) {
     assert.ok(featureIds.includes(expected));
   }

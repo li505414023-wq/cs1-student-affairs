@@ -1,4 +1,4 @@
-export type StudentRecord = { name: string; no: string; phone: string; gender: string; faculty: string; major: string; className: string; grade: string; birthDate: string; address: string; id?: string; status?: string };
+export type StudentRecord = { name: string; no: string; phone: string; gender: string; faculty: string; major: string; className: string; grade: string; birthDate: string; address: string; id?: string; status?: string; concernType?: string; crisisLevel?: string; crisisRelief?: string };
 
 export type StudentEditor = { mode: "create" | "view" | "edit"; student?: StudentRecord } | null;
 

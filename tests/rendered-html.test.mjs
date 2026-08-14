@@ -230,7 +230,7 @@ test("gives every non-student feature an explicit page presentation", async () =
   const missing = featureIds.filter((id) => !dedicatedIds.has(id) && !configuredIds.has(id));
 
   assert.deepEqual(missing, []);
-  assert.equal(featureIds.length, 116);
+  assert.equal(featureIds.length, 119);
 });
 
 test("matches the source student list filters, columns, and pagination controls", async () => {
