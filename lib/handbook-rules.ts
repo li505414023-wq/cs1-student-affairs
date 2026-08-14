@@ -30,6 +30,25 @@ export function leaveChainValid(days: number): boolean {
   return leaveApprovalChain(days) !== "";
 }
 
+/** 审批链岗位 → 系统角色标签（工作流任务按 roleTags 匹配审批人）。 */
+export const LEAVE_APPROVER_ROLE: Record<string, string> = {
+  区队指导员: "辅导员",
+  大队长: "院系管理员",
+  系部主任: "院系管理员",
+  分管院领导: "系统管理员",
+  院长: "系统管理员",
+  "系部主任(校内因公)": "院系管理员",
+};
+
+/** 按请假时长返回审批链数组（岗位名 + 匹配的角色标签），供工作流引擎逐级创建审批任务。 */
+export function leaveApproverChain(days: number, onCampusDuty = false): Array<{ approver: string; role: string }> {
+  return leaveApprovalChain(days, onCampusDuty)
+    .split("→")
+    .map((approver) => approver.trim())
+    .filter(Boolean)
+    .map((approver) => ({ approver, role: LEAVE_APPROVER_ROLE[approver] ?? approver }));
+}
+
 /* ---------------- 旷课累计处分(学籍管理 旷课条款) ---------------- */
 
 const ABSENCE_PUNISHMENT_LINES: Array<{ hours: number; punishment: string }> = [

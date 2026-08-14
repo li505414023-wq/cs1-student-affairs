@@ -4,8 +4,38 @@ import { getDb } from "@/db";
 import { workflowInstances, workflowTasks, workflowEventLog, workflowModels, notifications, businessRecords, leaves } from "@/db/schema";
 import { evaluate } from "./expression";
 import { canOperateTask, isFullAccessRole, assertInstanceAccess } from "./access";
+import { leaveApproverChain } from "../handbook-rules";
 import { WorkflowError } from "./types";
 import type { WorkflowStatus, AdvanceInput } from "./types";
+
+/**
+ * 请假审批链驱动的动态节点：按请假天数生成多级审批节点序列。
+ * 每级审批人的 assignee 为系统角色标签（由 leaveApproverChain 映射），
+ * 保证 getTodo 能按 roleTags 匹配到对应审批用户。
+ */
+function buildLeaveNodes(formData: Record<string, unknown>): Array<Record<string, unknown>> {
+  const days = Number(formData["请假天数"] ?? 0);
+  const onCampusDuty = String(formData["请假类型"] ?? "") === "公假" || String(formData["是否校内因公"] ?? "") === "是";
+  const chain = leaveApproverChain(days, onCampusDuty);
+  return [
+    { id: "start", type: "start", name: "开始" },
+    { id: "submit", type: "submit", name: "申请人提交", assignee: "流程发起人" },
+    ...chain.map((step, index) => ({
+      id: `approve-${index}`,
+      type: "approval",
+      name: `${step.approver}审批`,
+      assignee: step.role,
+      assigneeType: "role",
+    })),
+    { id: "end", type: "end", name: "结束" },
+  ];
+}
+
+/** 解析模型节点：请假模型按审批链动态生成，其余模型用静态 nodesJson。 */
+function resolveNodes(modelKey: string, nodesJson: unknown, formData: Record<string, unknown>): Array<Record<string, unknown>> {
+  if (modelKey === "leave") return buildLeaveNodes(formData);
+  return (nodesJson as Array<Record<string, unknown>>) ?? [];
+}
 
 /**
  * Lightweight workflow execution engine.
@@ -28,7 +58,7 @@ export class WorkflowEngine {
 
     if (!model) throw new WorkflowError(`流程模型 "${modelKey}" 不存在`, 404);
 
-    const nodes = (model.nodesJson as Array<Record<string, unknown>>) ?? [];
+    const nodes = resolveNodes(modelKey, model.nodesJson, formData);
     if (nodes.length === 0) throw new WorkflowError(`流程模型 "${modelKey}" 未配置节点，无法发起`, 422);
 
     const instanceId = randomUUID();
@@ -70,20 +100,20 @@ export class WorkflowEngine {
     if (instances.length === 0) return {};
     const modelIds = [...new Set(instances.map((instance) => instance.modelId))];
     const models = await this.db.select().from(workflowModels).where(inArray(workflowModels.id, modelIds));
-    const nodeNameByModel = new Map<string, Map<string, string>>();
-    for (const model of models) {
-      const map = new Map<string, string>();
-      for (const node of ((model.nodesJson as Array<Record<string, unknown>>) ?? [])) {
-        if (node.id && node.name) map.set(String(node.id), String(node.name));
-      }
-      nodeNameByModel.set(model.id, map);
-    }
+    const modelById = new Map(models.map((model) => [model.id, model]));
     const result: Record<string, { node: string; status: string; instanceId: string }> = {};
     for (const instance of instances) {
       if (!instance.recordId) continue;
-      const node = instance.status !== "运行中"
-        ? instance.status
-        : nodeNameByModel.get(instance.modelId)?.get(instance.currentNodeId ?? "") ?? "审核中";
+      let node: string;
+      if (instance.status !== "运行中") {
+        node = instance.status;
+      } else {
+        // 请假模型节点按审批链动态生成，须用实例 formData 解析节点名。
+        const model = modelById.get(instance.modelId);
+        const nodes = resolveNodes(instance.modelKey, model?.nodesJson, instance.formDataJson as Record<string, unknown>);
+        const current = nodes.find((n) => n.id === instance.currentNodeId);
+        node = (current?.name as string | undefined) ?? "审核中";
+      }
       result[instance.recordId] = { node, status: instance.status, instanceId: instance.id };
     }
     return result;
@@ -128,7 +158,7 @@ export class WorkflowEngine {
       .where(eq(workflowModels.key, instance.modelKey))
       .limit(1);
 
-    const nodes = (model?.nodesJson as Array<Record<string, unknown>>) ?? [];
+    const nodes = resolveNodes(instance.modelKey, model?.nodesJson, instance.formDataJson as Record<string, unknown>);
     const currentNode = nodes.find((n: Record<string, unknown>) => n.id === input.nodeId);
 
     if (!currentNode) throw new WorkflowError("流程节点不存在", 409);
@@ -222,7 +252,7 @@ export class WorkflowEngine {
       .where(eq(workflowModels.key, instance.modelKey))
       .limit(1);
 
-    const nodes = (model?.nodesJson as Array<Record<string, unknown>>) ?? [];
+    const nodes = resolveNodes(instance.modelKey, model?.nodesJson, instance.formDataJson as Record<string, unknown>);
     const startNode = nodes.find((n: Record<string, unknown>) => n.type === "start") ?? nodes[0];
 
     await this.db

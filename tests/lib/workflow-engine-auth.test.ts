@@ -50,12 +50,12 @@ const NODES = [
   { id: "n-end", type: "end", name: "结束" },
 ];
 
-const modelRow = { key: "leave", nodesJson: NODES };
+const modelRow = { key: "test-flow", nodesJson: NODES };
 
 function instanceRow(overrides: Record<string, unknown> = {}) {
   return {
     id: "i-1",
-    modelKey: "leave",
+    modelKey: "test-flow",
     status: "运行中",
     currentNodeId: "n-approve",
     startedBy: "u-student",
@@ -235,7 +235,7 @@ describe("workflow engine condition branching", () => {
       select: [
         [instanceRow()],                                  // instance status check
         [taskRow()],                                      // access check
-        [{ key: "leave", nodesJson: CONDITION_NODES }],   // model
+        [{ key: "test-flow", nodesJson: CONDITION_NODES }],   // model
         [taskRow()],                                      // pending task
         [instanceRow()],                                  // completeCurrentTask notification lookup
         [instanceRow({ formDataJson: { days: "5" } })],   // evaluateCondition formData
@@ -259,7 +259,7 @@ describe("workflow engine condition branching", () => {
       select: [
         [instanceRow()],
         [taskRow()],
-        [{ key: "leave", nodesJson: CONDITION_NODES }],
+        [{ key: "test-flow", nodesJson: CONDITION_NODES }],
         [taskRow()],
         [instanceRow()],                                  // completeCurrentTask notification
         [instanceRow({ formDataJson: { days: "1" } })],   // evaluateCondition → false

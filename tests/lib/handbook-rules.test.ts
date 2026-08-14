@@ -8,6 +8,7 @@ import {
   CONDUCT_BASE_SCORE,
   isAppealInDeadline,
   leaveApprovalChain,
+  leaveApproverChain,
   leaveChainValid,
   punishmentConductDelta,
   SCHOLARSHIP_CONFIG,
@@ -38,6 +39,19 @@ describe("请假分级审批链(考勤管理办法第八条)", () => {
   });
   it("校内因公请假由系部主任审批", () => {
     expect(leaveApprovalChain(2, true)).toBe("系部主任(校内因公)");
+  });
+  it("审批链岗位映射到系统角色标签（工作流按 roleTags 匹配）", () => {
+    expect(leaveApproverChain(2)).toEqual([
+      { approver: "区队指导员", role: "辅导员" },
+      { approver: "大队长", role: "院系管理员" },
+    ]);
+    expect(leaveApproverChain(60)).toEqual([
+      { approver: "区队指导员", role: "辅导员" },
+      { approver: "大队长", role: "院系管理员" },
+      { approver: "系部主任", role: "院系管理员" },
+      { approver: "分管院领导", role: "系统管理员" },
+      { approver: "院长", role: "系统管理员" },
+    ]);
   });
 });
 
