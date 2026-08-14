@@ -52,7 +52,16 @@ export const featureGroups: FeatureGroup[] = [
       { label: "节假日去向", features: [{ id: "return-school", label: "返校管理", stage: "review" }, { id: "holiday", label: "节假日管理", stage: "config" }] },
       { label: "投诉管理", features: [{ id: "complaints", label: "投诉管理", stage: "review" }] },
       { label: "处分申诉", features: [{ id: "appeal", label: "处分申诉", stage: "apply" }] },
-      { label: "辅导员关怀", features: [{ id: "talks", label: "谈心谈话", stage: "review" }, { id: "crisis-records", label: "心理危机", stage: "review" }, { id: "help-records", label: "学业帮扶", stage: "review" }] },
+    ],
+  },
+  {
+    id: "care",
+    label: "辅导员关怀",
+    icon: "关",
+    children: [
+      { label: "谈心谈话", features: [{ id: "talks", label: "谈心谈话", stage: "review" }] },
+      { label: "心理危机", features: [{ id: "crisis-records", label: "心理危机", stage: "review" }] },
+      { label: "学业帮扶", features: [{ id: "help-records", label: "学业帮扶", stage: "review" }] },
     ],
   },
   {
