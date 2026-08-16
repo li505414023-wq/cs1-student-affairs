@@ -7,7 +7,7 @@
  */
 import { randomUUID } from "node:crypto";
 import pg from "pg";
-import { hashPassword } from "../lib/security.js";
+import { hashPassword } from "./hash-password.mjs";
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
 if (!databaseUrl) throw new Error("缺少 DATABASE_URL");

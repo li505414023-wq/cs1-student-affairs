@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import pg from "pg";
-import { hashPassword } from "../lib/security.js";
+import { hashPassword } from "./hash-password.mjs";
 import { createTestDataset, extractFeatureIds } from "../lib/test-data-generator.js";
 import { seedOrgHierarchy } from "./seed-org-hierarchy.mjs";
 import { REAL_WORKFLOW_MODELS } from "./workflow-model-definitions.mjs";

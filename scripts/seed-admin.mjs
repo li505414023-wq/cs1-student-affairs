@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
-import { hashPassword } from "../lib/security.js";
+import { hashPassword } from "./hash-password.mjs";
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
 const username = process.env.BOOTSTRAP_ADMIN_USERNAME?.trim();
