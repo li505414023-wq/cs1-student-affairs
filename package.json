@@ -17,6 +17,8 @@
     "db:migrate:data": "node --env-file=.env.local scripts/migrate-jsonb.mjs",
     "db:seed": "node --env-file=.env.local scripts/seed-admin.mjs",
     "db:seed:flows": "node --env-file=.env.local scripts/seed-workflow-models.mjs",
+    "db:seed:users": "node --env-file=.env.local scripts/seed-users.mjs",
+    "db:cleanup:orphans": "node --env-file=.env.local scripts/cleanup-orphan-models.mjs",
     "db:seed:test": "node --env-file=.env.local scripts/seed-full-test-data.mjs"
   },
   "dependencies": {

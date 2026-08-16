@@ -83,7 +83,7 @@ export const featureGroups: FeatureGroup[] = [
     children: [
       { label: "奖学金管理", features: [{ id: "scholarship", label: "奖学金评定", stage: "review" }] },
       { label: "荣誉称号管理", features: [{ id: "honor", label: "荣誉称号", stage: "review" }] },
-      { label: "违纪处分", features: [{ id: "discipline", label: "违纪管理", stage: "apply" }, { id: "punishment", label: "处分管理", stage: "review" }, { id: "revoke", label: "处分撤销", stage: "review" }, { id: "discipline-type", label: "违纪类型", stage: "config" }, { id: "punishment-type", label: "处分类型", stage: "config" }] },
+      { label: "违纪处分", features: [{ id: "discipline", label: "违纪管理", stage: "review" }, { id: "punishment", label: "处分管理", stage: "review" }, { id: "revoke", label: "处分撤销", stage: "review" }, { id: "discipline-type", label: "违纪类型", stage: "config" }, { id: "punishment-type", label: "处分类型", stage: "config" }] },
     ],
   },
   {

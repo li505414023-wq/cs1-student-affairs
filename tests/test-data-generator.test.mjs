@@ -24,7 +24,11 @@ test("generates deterministic full-coverage datasets", () => {
   assert.equal(first.businessRecords.length, featureIds.length * 3);
   assert.equal(new Set(first.students.map((student) => student.no)).size, 40);
   assert.equal(new Set(first.businessRecords.map((record) => record.featureId)).size, featureIds.length);
-  assert.ok(first.users.some((user) => user.role === "staff"));
+  // 审批角色齐全：三级评审（辅导员→院系→学校）与住宿申办（宿管）需真实用户认领，
+  // 缺院系管理员/宿管员会导致对应审批节点无人认领、退化成 admin 单点审批。
+  assert.ok(first.users.some((user) => user.role === "counselor"));
+  assert.ok(first.users.some((user) => user.role === "department_admin"));
+  assert.ok(first.users.some((user) => user.role === "dorm_manager"));
   assert.ok(first.users.some((user) => user.role === "viewer"));
   assert.ok(first.workflowForms.length >= 8);
   assert.ok(first.workflowModels.length >= 10);

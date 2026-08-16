@@ -18,7 +18,7 @@ if (!testPassword || testPassword.length < 12) throw new Error("TEST_USER_PASSWO
 
 const source = await readFile(resolve(process.cwd(), "app/system-data.ts"), "utf8");
 const featureIds = extractFeatureIds(source);
-if (featureIds.length !== 116) throw new Error(`功能入口数量异常：预期 116，实际 ${featureIds.length}`);
+if (featureIds.length !== 119) throw new Error(`功能入口数量异常：预期 119，实际 ${featureIds.length}`);
 
 // 菜单减负后收进域页面 Tab 的子功能（与 app/domain-tabs.ts 保持同步）：
 // 导航不再平铺，但仍是独立的 records featureId，需要生成演示数据。
@@ -66,8 +66,8 @@ try {
 
   for (const [index, user] of dataset.users.entries()) {
     await client.query(
-      "insert into users (id, username, display_name, password_hash, role, active) values ($1, $2, $3, $4, $5, true)",
-      [user.id, user.username, user.displayName, userPasswordHashes[index], user.role],
+      "insert into users (id, username, display_name, password_hash, role, role_tags, active) values ($1, $2, $3, $4, $5, $6, true)",
+      [user.id, user.username, user.displayName, userPasswordHashes[index], user.role, user.roleTags ?? []],
     );
   }
   for (const [index, student] of dataset.students.entries()) {
