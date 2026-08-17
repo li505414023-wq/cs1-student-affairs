@@ -8,7 +8,7 @@ import type { WorkflowModel, WorkflowForm, WorkflowDeployment } from "./componen
 
 export type { WorkflowNode, WorkflowModel, WorkflowField, WorkflowForm, WorkflowDeployment } from "./components/workflow/workflow-types";
 
-// flow-button/flow-category/form-default/flow-expression 走 EntityModule 真实 CRUD（managed_items 持久化）。
+// flow-category 走 EntityModule 真实 CRUD（managed_items 持久化）。
 const workflowDesignIds = new Set(["model-design", "form-design", "deployment"]);
 
 export function isWorkflowDesignFeature(featureId: string) { return workflowDesignIds.has(featureId); }

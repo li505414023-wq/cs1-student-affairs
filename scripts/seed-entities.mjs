@@ -57,31 +57,10 @@ try {
   await put("post-admin", "POST-BZR", "班主任", { sort: 2, data: { category: "专技岗" } });
   await put("post-admin", "POST-SGY", "宿管员", { sort: 3, data: { category: "工勤岗" } });
 
-  // ---- 流程分类 / 流程按钮 ----
+  // ---- 流程分类 ----
   await put("flow-category", "FC-STU", "学生事务", { sort: 1 });
   await put("flow-category", "FC-DORM", "宿舍事务", { sort: 2 });
   await put("flow-category", "FC-AID", "助困事务", { sort: 3 });
-  await put("flow-button", "BTN-AGREE", "同意", { sort: 1, data: { buttonType: "同意", action: "approve" } });
-  await put("flow-button", "BTN-REJECT", "拒绝", { sort: 2, data: { buttonType: "拒绝", action: "reject" } });
-  await put("flow-button", "BTN-RETURN", "退回", { sort: 3, data: { buttonType: "退回", action: "return" } });
-
-  // ---- 校内发布示例 ----
-  await put("announcement", "ANN-001", "关于暑期离校登记的通知", {
-    sort: 1,
-    data: { content: "请各位同学在离校前完成去向登记。", scope: "全校", publishAt: "2026-07-01" },
-  });
-  await put("announcement", "ANN-002", "奖助学金评定工作启动通知", {
-    sort: 2,
-    data: { content: "本学年奖助学金评定工作已启动,请关注批次安排。", scope: "全校", publishAt: "2026-07-10" },
-  });
-  await put("campus-news", "NEWS-001", "我校学工系统完成升级上线", {
-    sort: 1,
-    data: { content: "智慧学工系统完成安全加固与流程升级,欢迎师生使用。", author: "信息中心", publishAt: "2026-07-24" },
-  });
-  await put("home-carousel", "CAR-001", "新学期欢迎横幅", {
-    sort: 1,
-    data: { image: "https://placehold.co/1200x360?text=Welcome", link: "" },
-  });
 
   const { rows: summary } = await pool.query(
     `select feature_id, count(*)::int as n from managed_items group by feature_id order by feature_id`,

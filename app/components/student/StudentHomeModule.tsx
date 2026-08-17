@@ -28,7 +28,6 @@ const ADMIN_ACTIONS: Array<{ label: string; featureId: string; description: stri
   { label: "待办审批", featureId: "todo", description: "处理等待我审批的申请" },
   { label: "用户管理", featureId: "user-admin", description: "账号、角色与状态管理" },
   { label: "数据权限", featureId: "data-permission", description: "辅导员-班级绑定与数据范围" },
-  { label: "通知公告", featureId: "announcement", description: "发布校内通知与公告" },
 ];
 
 function formatTime(value: string) {

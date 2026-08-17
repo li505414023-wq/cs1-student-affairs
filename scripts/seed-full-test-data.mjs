@@ -18,7 +18,7 @@ if (!testPassword || testPassword.length < 12) throw new Error("TEST_USER_PASSWO
 
 const source = await readFile(resolve(process.cwd(), "app/system-data.ts"), "utf8");
 const featureIds = extractFeatureIds(source);
-if (featureIds.length !== 119) throw new Error(`功能入口数量异常：预期 119，实际 ${featureIds.length}`);
+if (featureIds.length !== 110) throw new Error(`功能入口数量异常：预期 110，实际 ${featureIds.length}`);
 
 // 菜单减负后收进域页面 Tab 的子功能（与 app/domain-tabs.ts 保持同步）：
 // 导航不再平铺，但仍是独立的 records featureId，需要生成演示数据。

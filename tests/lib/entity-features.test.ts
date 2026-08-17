@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { ENTITY_FEATURE_IDS, getEntityConfig, isEntityFeature } from "@/lib/entity-features";
+import { ENTITY_FEATURE_IDS, getEntityConfig, isEntityFeature, type EntityFeatureConfig } from "@/lib/entity-features";
 import { buildEntityDataSchema, validateEntityInput } from "@/lib/validation-entities";
 
 describe("entity feature registry", () => {
-  it("registers the 18 engine-backed features", () => {
-    expect(ENTITY_FEATURE_IDS).toHaveLength(18);
+  it("registers the 9 engine-backed features", () => {
+    expect(ENTITY_FEATURE_IDS).toHaveLength(9);
     for (const id of ["faculty-admin", "major-admin", "corps-admin", "class-admin", "org-admin", "post-admin",
-      "system-dict", "business-dict", "menu-admin", "top-menu", "flow-category", "flow-button",
-      "form-default", "flow-expression", "home-carousel", "announcement", "campus-news", "process-agent"]) {
+      "system-dict", "business-dict", "flow-category"]) {
       expect(ENTITY_FEATURE_IDS).toContain(id);
     }
   });
@@ -56,8 +55,19 @@ describe("entity validation", () => {
     }
   });
 
-  it("enforces required fields from the registry", () => {
-    const result = validateEntityInput(getEntityConfig("process-agent")!, { name: "代理规则" });
+  it("enforces required fields from a feature config", () => {
+    const config: EntityFeatureConfig = {
+      featureId: "test",
+      label: "测试",
+      nameLabel: "名称",
+      description: "",
+      columns: [],
+      fields: [
+        { key: "fromUser", label: "委托人", required: true },
+        { key: "toUser", label: "受托人", required: true },
+      ],
+    };
+    const result = validateEntityInput(config, { name: "代理规则" });
     expect(result.success).toBe(false);
     if (!result.success) {
       const fields = result.errors.map((error) => error.field);

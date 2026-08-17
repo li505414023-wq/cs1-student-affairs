@@ -191,17 +191,12 @@ export const policeFeatureGroups: FeatureGroup[] = [
 
 export const adminFeatureGroups: FeatureGroup[] = [
   { id: "workflow", label: "协同办公", icon: "流", children: [
-    { label: "流程设计", features: [{ id: "model-design", label: "模型设计", stage: "config" }, { id: "form-design", label: "表单设计", stage: "config" }, { id: "deployment", label: "部署管理", stage: "config" }, { id: "flow-button", label: "流程按钮", stage: "config" }, { id: "flow-category", label: "流程分类", stage: "config" }, { id: "form-default", label: "表单默认值", stage: "config" }, { id: "flow-expression", label: "流程表达式", stage: "config" }] },
+    { label: "流程设计", features: [{ id: "model-design", label: "模型设计", stage: "config" }, { id: "form-design", label: "表单设计", stage: "config" }, { id: "deployment", label: "部署管理", stage: "config" }, { id: "flow-category", label: "流程分类", stage: "config" }] },
     { label: "我的事务", features: [{ id: "new-flow", label: "新建流程", stage: "apply" }, { id: "todo", label: "待办事宜", stage: "review" }, { id: "my-request", label: "我的请求", stage: "review" }, { id: "done", label: "已办结", stage: "archive" }] },
-    { label: "流程运维", features: [{ id: "ops-schedule", label: "运维调度", stage: "review" }, { id: "ops-finished", label: "办结流程", stage: "archive" }, { id: "process-list", label: "流程列表", stage: "archive" }, { id: "process-agent", label: "流程代理", stage: "config" }] },
+    { label: "流程运维", features: [{ id: "ops-schedule", label: "运维调度", stage: "review" }, { id: "ops-finished", label: "办结流程", stage: "archive" }, { id: "process-list", label: "流程列表", stage: "archive" }] },
   ] },
   { id: "political-work", label: "政工管理", icon: "政", children: [
     { label: "政工管理", features: [{ id: "team-building", label: "队伍建设", stage: "review" }, { id: "headteacher-query", label: "班主任任职查询", stage: "archive" }] },
-  ] },
-  { id: "campus-publish", label: "校内发布", icon: "发", children: [
-    { label: "首页轮播", features: [{ id: "home-carousel", label: "首页轮播", stage: "config" }] },
-    { label: "通知公告", features: [{ id: "announcement", label: "通知公告", stage: "config" }] },
-    { label: "校内新闻", features: [{ id: "campus-news", label: "校内新闻", stage: "config" }] },
   ] },
   { id: "faculty-admin", label: "院系管理", icon: "院", children: [
     { label: "学院管理", features: [{ id: "faculty-admin", label: "学院管理", stage: "config" }] },
@@ -212,7 +207,7 @@ export const adminFeatureGroups: FeatureGroup[] = [
     { label: "权限管理", features: [{ id: "role-admin", label: "角色管理", stage: "config" }, { id: "data-permission", label: "数据权限", stage: "config" }, { id: "api-permission", label: "接口权限", stage: "config" }] },
   ] },
   { id: "system-admin", label: "系统管理", icon: "系", children: [
-    { label: "系统管理", features: [{ id: "user-admin", label: "用户管理", stage: "config" }, { id: "org-admin", label: "机构管理", stage: "config" }, { id: "post-admin", label: "岗位管理", stage: "config" }, { id: "system-dict", label: "系统字典", stage: "config" }, { id: "business-dict", label: "业务字典", stage: "config" }, { id: "menu-admin", label: "菜单管理", stage: "config" }, { id: "top-menu", label: "顶部菜单", stage: "config" }] },
+    { label: "系统管理", features: [{ id: "user-admin", label: "用户管理", stage: "config" }, { id: "org-admin", label: "机构管理", stage: "config" }, { id: "post-admin", label: "岗位管理", stage: "config" }, { id: "system-dict", label: "系统字典", stage: "config" }, { id: "business-dict", label: "业务字典", stage: "config" }] },
   ] },
   { id: "monitor", label: "系统监控", icon: "监", children: [
     { label: "日志管理", features: [{ id: "usual-log", label: "通用日志", stage: "archive" }, { id: "api-log", label: "接口日志", stage: "archive" }, { id: "error-log", label: "错误日志", stage: "archive" }] },
